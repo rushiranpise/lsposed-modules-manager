@@ -423,6 +423,7 @@ private fun OverviewTab(
     }
     ReadmeWebView(
         html = readme,
+        repoFullName = module.githubRepoFullName(),
         onOpenLink = onOpenLink,
         modifier = Modifier.fillMaxSize(),
     )
@@ -431,10 +432,13 @@ private fun OverviewTab(
 @Composable
 private fun ReadmeWebView(
     html: String,
+    repoFullName: String?,
     onOpenLink: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    val baseUrl = repoFullName?.let { "https://github.com/$it/" } ?: "https://github.com"
+    val rendered = remember(html, repoFullName) { rewriteRelativeImages(html, repoFullName) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) {
         onDispose {
@@ -461,13 +465,26 @@ private fun ReadmeWebView(
                         return true
                     }
                 }
-                loadDataWithBaseURL("https://github.com", wrapReadme(html, dark), "text/html", "utf-8", null)
+                loadDataWithBaseURL(baseUrl, wrapReadme(rendered, dark), "text/html", "utf-8", null)
             }
         },
         update = { webView ->
-            webView.loadDataWithBaseURL("https://github.com", wrapReadme(html, dark), "text/html", "utf-8", null)
+            webView.loadDataWithBaseURL(baseUrl, wrapReadme(rendered, dark), "text/html", "utf-8", null)
         },
     )
+}
+
+private val RELATIVE_IMG_SRC = Regex("""(<img\b[^>]*\bsrc=")(?!https?:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
+
+// GitHub's README HTML keeps relative asset paths. Load them from the raw repo
+// instead of the GitHub site root, where they do not exist.
+private fun rewriteRelativeImages(html: String, repoFullName: String?): String {
+    if (repoFullName.isNullOrBlank()) return html
+    val rawBase = "https://raw.githubusercontent.com/$repoFullName/HEAD/"
+    return RELATIVE_IMG_SRC.replace(html) { match ->
+        val path = match.groupValues[2].removePrefix("./").removePrefix("/")
+        match.groupValues[1] + rawBase + path
+    }
 }
 
 private fun wrapReadme(html: String, dark: Boolean): String {
