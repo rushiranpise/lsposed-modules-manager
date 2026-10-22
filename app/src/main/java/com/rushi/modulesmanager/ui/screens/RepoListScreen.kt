@@ -1,5 +1,6 @@
 package com.rushi.modulesmanager.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -317,6 +318,7 @@ fun RepoListScreen(
                                         viewModel.cachedTranslation(module)?.let { TranslationState(text = it) }
                                     },
                                     onTranslate = { viewModel.translate(module) },
+                                    onShowOriginal = { viewModel.showOriginal(module) },
                                     onClick = { onOpenModule(module.packageName) },
                                 )
                             }
@@ -353,26 +355,49 @@ fun RepoListScreen(
 
 }
 
+/** The description line, swapped for its translation while one is showing. */
 @Composable
-private fun TranslationLine(translation: TranslationState?, onTranslate: () -> Unit) {
-    when {
-        translation?.text != null -> {
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.Top) {
+private fun DescriptionBlock(
+    summary: String,
+    translation: TranslationState?,
+    onTranslate: () -> Unit,
+    onShowOriginal: () -> Unit,
+) {
+    val translated = translation?.text
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.Top) {
+        if (translated != null) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 1.dp)
+                    .size(20.dp)
+                    .clickable(onClick = onShowOriginal),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Translate,
-                    contentDescription = "Translated",
+                    contentDescription = "Show original",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 2.dp).size(14.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = translation.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(14.dp),
                 )
             }
+            Spacer(Modifier.width(6.dp))
         }
+        Text(
+            text = translated ?: summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (translated != null) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    when {
+        translated != null -> Unit
         translation?.loading == true -> {
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -406,6 +431,7 @@ private fun ModuleCard(
     channel: UpdateChannel,
     translation: TranslationState?,
     onTranslate: () -> Unit,
+    onShowOriginal: () -> Unit,
     onClick: () -> Unit,
 ) {
     Card(
@@ -427,15 +453,12 @@ private fun ModuleCard(
                 Spacer(Modifier.height(2.dp))
                 PackageLabel(module.packageName)
                 module.summary?.takeIf { it.isNotBlank() }?.let { summary ->
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                    DescriptionBlock(
+                        summary = summary,
+                        translation = translation,
+                        onTranslate = onTranslate,
+                        onShowOriginal = onShowOriginal,
                     )
-                    TranslationLine(translation = translation, onTranslate = onTranslate)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(

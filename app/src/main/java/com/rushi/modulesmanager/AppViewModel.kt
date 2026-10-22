@@ -703,6 +703,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Hides the translation so the original description shows again. */
+    fun showOriginal(module: RepoModule) {
+        // An empty state also masks a saved translation from earlier runs.
+        _translations.update { it + (module.packageName to TranslationState()) }
+    }
+
     private fun targetLanguage(): String = Locale.getDefault().language
 
     private fun displayLanguage(tag: String): String =
