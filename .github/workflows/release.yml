@@ -54,13 +54,28 @@ jobs:
         run: |
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          for APK in app/build/outputs/apk/release/app-*-release.apk; do
+            echo "Verifying $APK"
+            "$APKSIGNER" verify --print-certs "$APK"
+          done
 
       - name: Prepare release files
         run: |
           TAG="${GITHUB_REF_NAME}"
-          cp app/build/outputs/apk/debug/app-debug.apk "ModulesManager-${TAG}-debug.apk"
-          cp app/build/outputs/apk/release/app-release.apk "ModulesManager-${TAG}-release.apk"
+          rm -rf artifacts
+          mkdir -p artifacts
+          for APK in app/build/outputs/apk/debug/app-*-debug.apk; do
+            NAME=$(basename "$APK")
+            ABI=${NAME#app-}
+            ABI=${ABI%-debug.apk}
+            cp "$APK" "artifacts/ModulesManager-${TAG}-debug-${ABI}.apk"
+          done
+          for APK in app/build/outputs/apk/release/app-*-release.apk; do
+            NAME=$(basename "$APK")
+            ABI=${NAME#app-}
+            ABI=${ABI%-release.apk}
+            cp "$APK" "artifacts/ModulesManager-${TAG}-release-${ABI}.apk"
+          done
           PREVIOUS=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREVIOUS" ]; then RANGE="${PREVIOUS}..HEAD"; else RANGE="HEAD"; fi
           {
@@ -69,8 +84,13 @@ jobs:
             echo
             echo
             echo "## Downloads"
-            echo "- \`ModulesManager-${TAG}-release.apk\`: signed release build"
-            echo "- \`ModulesManager-${TAG}-debug.apk\`: debug build"
+            echo "Each APK contains one CPU architecture. Most phones need the arm64-v8a build."
+            echo
+            echo "- \`ModulesManager-${TAG}-release-arm64-v8a.apk\`: signed, 64-bit ARM phones"
+            echo "- \`ModulesManager-${TAG}-release-armeabi-v7a.apk\`: signed, 32-bit ARM phones"
+            echo "- \`ModulesManager-${TAG}-release-x86_64.apk\`: signed, x86_64 emulators"
+            echo "- \`ModulesManager-${TAG}-release-x86.apk\`: signed, x86 emulators"
+            echo "- \`ModulesManager-${TAG}-debug-<abi>.apk\`: debug builds, one per architecture"
           } > release-notes.md
 
       - name: Publish GitHub release
@@ -80,11 +100,10 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "Modules Manager ${TAG}" --notes-file release-notes.md
-            gh release upload "$TAG" "ModulesManager-${TAG}-debug.apk" "ModulesManager-${TAG}-release.apk" --clobber
+            gh release upload "$TAG" artifacts/*.apk --clobber
           else
             gh release create "$TAG" \
-              "ModulesManager-${TAG}-debug.apk" \
-              "ModulesManager-${TAG}-release.apk" \
+              artifacts/*.apk \
               --title "Modules Manager ${TAG}" \
               --notes-file release-notes.md
           fi

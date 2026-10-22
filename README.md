@@ -38,7 +38,7 @@ Requires JDK 21 and Android SDK 37.
 ./gradlew :app:testDebugUnitTest
 ```
 
-Signed release APKs are built by the [release workflow](.github/workflows/release.yml) when a `v*` tag is pushed.
+Signed release APKs are built by the [release workflow](.github/workflows/release.yml) when a `v*` tag is pushed. The build is split by CPU architecture, so download the `arm64-v8a` APK for most phones.
 
 ## Data
 

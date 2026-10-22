@@ -31,6 +31,17 @@ android {
         buildConfig = true
     }
 
+    // ML Kit's translation engine is about 16 MB per ABI, so each release ships one APK per
+    // architecture instead of a single APK that carries all of them.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = false
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
