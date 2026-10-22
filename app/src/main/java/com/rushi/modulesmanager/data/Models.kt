@@ -132,6 +132,11 @@ data class RepoModule(
             if (owner.equals("Xposed-Modules-Repo", ignoreCase = true)) continue
             return "$owner/${match.groupValues[2].removeSuffix(".git")}"
         }
+        // Some modules exist only in the Xposed-Modules-Repo mirror. Its README
+        // is the only one available, so use it when there is no source repo.
+        repoFullName
+            ?.takeIf { it.startsWith("Xposed-Modules-Repo/", ignoreCase = true) }
+            ?.let { return it }
         return null
     }
 
