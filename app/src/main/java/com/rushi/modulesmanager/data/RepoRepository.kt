@@ -124,27 +124,47 @@ class RepoRepository(
     }
 
     /** Keeps a README fetched from GitHub so reopening a module does not fetch it again. */
-    fun applyReadme(packageName: String, html: String) {
+    fun applyReadme(packageName: String, html: String, markdown: String? = null) {
         _modules.value = _modules.value.map { module ->
             if (module.packageName == packageName) module.copy(readmeHtml = html) else module
         }
         details[packageName]?.let { details[packageName] = it.copy(readmeHtml = html) }
-        runCatching { readmeFile(packageName).writeText(html) }
+        runCatching { readmeFile(packageName, "html").writeText(html) }
+        if (!markdown.isNullOrBlank()) {
+            runCatching { readmeFile(packageName, "md").writeText(markdown) }
+        }
     }
 
     /** Returns the last README fetched for this package, surviving app restarts. */
-    fun cachedReadme(packageName: String): String? {
-        val file = readmeFile(packageName)
+    fun cachedReadme(packageName: String): String? = cachedReadmeText(packageName, "html")
+
+    /** The raw Markdown behind the cached README, needed to translate it. */
+    fun cachedReadmeMarkdown(packageName: String): String? = cachedReadmeText(packageName, "md")
+
+    fun cachedReadmeTranslation(packageName: String, language: String): String? =
+        cachedReadmeText(packageName, "${language.sanitizeLanguage()}.md")
+
+    fun saveReadmeTranslation(packageName: String, language: String, markdown: String) {
+        runCatching {
+            readmeFile(packageName, "${language.sanitizeLanguage()}.md").writeText(markdown)
+        }
+    }
+
+    private fun cachedReadmeText(packageName: String, extension: String): String? {
+        val file = readmeFile(packageName, extension)
         if (!file.isFile) return null
         return runCatching { file.readText().takeIf { it.isNotBlank() } }.getOrNull()
     }
 
-    private fun readmeFile(packageName: String): File {
+    private fun String.sanitizeLanguage(): String =
+        lowercase().filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "und" }
+
+    private fun readmeFile(packageName: String, extension: String): File {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(packageName.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 16)
-        return File(context.filesDir, "readme-cache").apply { mkdirs() }.resolve("$digest.html")
+        return File(context.filesDir, "readme-cache").apply { mkdirs() }.resolve("$digest.$extension")
     }
 
     fun cachedModule(packageName: String): RepoModule? =

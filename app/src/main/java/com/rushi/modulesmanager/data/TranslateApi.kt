@@ -39,7 +39,35 @@ object TranslateApi {
         }
     }
 
-    private suspend fun identify(text: String): String? {
+    /** Translates chunks with a single client so the model is only prepared once. */
+    suspend fun translateChunks(
+        chunks: List<String>,
+        sourceLanguage: String,
+        targetTag: String,
+        onProgress: (Float) -> Unit = {},
+    ): List<String> = withContext(Dispatchers.Default) {
+        val target = TranslateLanguage.fromLanguageTag(targetTag)
+            ?: throw IllegalStateException("Translation is not available for this language")
+        val translator = Translation.getClient(
+            TranslatorOptions.Builder()
+                .setSourceLanguage(sourceLanguage)
+                .setTargetLanguage(target)
+                .build(),
+        )
+        try {
+            translator.downloadModelIfNeeded().await()
+            val translated = ArrayList<String>(chunks.size)
+            chunks.forEachIndexed { index, chunk ->
+                translated += translator.translate(chunk).await()
+                onProgress((index + 1f) / chunks.size)
+            }
+            translated
+        } finally {
+            translator.close()
+        }
+    }
+
+    suspend fun identify(text: String): String? {
         val identifier = LanguageIdentification.getClient()
         return try {
             val code = identifier.identifyLanguage(text).await()

@@ -19,6 +19,7 @@ import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.InstallerType
 import com.rushi.modulesmanager.data.LiveUpdateRateLimitException
 import com.rushi.modulesmanager.data.ModuleVersion
+import com.rushi.modulesmanager.data.ReadmeTranslator
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.ShizukuInstaller
@@ -62,6 +63,13 @@ data class ModuleUpdate(
 )
 
 data class TranslationState(val text: String? = null, val loading: Boolean = false)
+
+data class ReadmeTranslationState(
+    val loading: Boolean = false,
+    val progress: Float = 0f,
+    val html: String? = null,
+    val language: String? = null,
+)
 
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
@@ -114,7 +122,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _detailError = MutableStateFlow<String?>(null)
     val detailError: StateFlow<String?> = _detailError.asStateFlow()
 
+    private val _readmeTranslation = MutableStateFlow<ReadmeTranslationState?>(null)
+    val readmeTranslation: StateFlow<ReadmeTranslationState?> = _readmeTranslation.asStateFlow()
+
     private var detailJob: Job? = null
+    private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
@@ -408,6 +420,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openModule(packageName: String) {
         detailJob?.cancel()
+        readmeTranslationJob?.cancel()
+        _readmeTranslation.value = null
         _detail.value = container.repo.cachedModule(packageName)
         _detailError.value = null
         _detailLoading.value = true
@@ -434,10 +448,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
                 val repoFullName = module.githubRepoFullName()
                 if (repoFullName != null) {
-                    val html = container.readmeApi.fetchHtml(repoFullName)
-                    if (html != null && _detail.value?.packageName == packageName) {
-                        container.repo.applyReadme(packageName, html)
-                        _detail.value = _detail.value?.copy(readmeHtml = html)
+                    val document = container.readmeApi.fetch(repoFullName)
+                    if (document != null && _detail.value?.packageName == packageName) {
+                        container.repo.applyReadme(packageName, document.html, document.markdown)
+                        _detail.value = _detail.value?.copy(readmeHtml = document.html)
                     }
                 }
             }
@@ -446,9 +460,80 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun closeModule() {
         detailJob?.cancel()
+        readmeTranslationJob?.cancel()
+        _readmeTranslation.value = null
         _detail.value = null
         _detailError.value = null
         _detailLoading.value = false
+    }
+
+    /** Translates the open README on demand, reusing a saved translation when there is one. */
+    fun translateReadme() {
+        val module = _detail.value ?: return
+        if (readmeTranslationJob?.isActive == true) return
+        val packageName = module.packageName
+        val target = targetLanguage()
+        val current = _readmeTranslation.value
+        if (current?.html != null && current.language == target) return
+
+        _readmeTranslation.value = ReadmeTranslationState(loading = true, language = target)
+        readmeTranslationJob = viewModelScope.launch {
+            try {
+                val cached = withContext(Dispatchers.IO) {
+                    container.repo.cachedReadmeTranslation(packageName, target)
+                }
+                if (!cached.isNullOrBlank()) {
+                    val html = withContext(Dispatchers.Default) {
+                        container.readmeApi.renderMarkdown(cached)
+                    }
+                    _readmeTranslation.value = ReadmeTranslationState(html = html, language = target)
+                    return@launch
+                }
+
+                val markdown = readmeMarkdown(module)
+                if (markdown.isNullOrBlank()) {
+                    _readmeTranslation.value = null
+                    message("This README has no Markdown text that can be translated")
+                    return@launch
+                }
+
+                val result = ReadmeTranslator.translate(markdown, target) { progress ->
+                    _readmeTranslation.update { it?.copy(progress = progress) }
+                }
+                if (!result.translated) {
+                    _readmeTranslation.value = null
+                    message("This README is already in ${displayLanguage(target)}")
+                    return@launch
+                }
+                val html = withContext(Dispatchers.Default) {
+                    container.readmeApi.renderMarkdown(result.markdown)
+                }
+                withContext(Dispatchers.IO) {
+                    container.repo.saveReadmeTranslation(packageName, target, result.markdown)
+                }
+                if (_detail.value?.packageName != packageName) return@launch
+                _readmeTranslation.value = ReadmeTranslationState(html = html, language = target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _readmeTranslation.value = null
+                message(e.message ?: "Could not translate this README")
+            }
+        }
+    }
+
+    /** The raw Markdown of the open README, fetched from GitHub when only the HTML is cached. */
+    private suspend fun readmeMarkdown(module: RepoModule): String? {
+        val cached = withContext(Dispatchers.IO) {
+            container.repo.cachedReadmeMarkdown(module.packageName)
+        }
+        if (!cached.isNullOrBlank()) return cached
+
+        val repoFullName = module.githubRepoFullName() ?: return null
+        val document = container.readmeApi.fetch(repoFullName) ?: return null
+        val markdown = document.markdown ?: return null
+        container.repo.applyReadme(module.packageName, document.html, markdown)
+        return markdown
     }
 
     fun latestVersion(module: RepoModule): ModuleVersion? = module.latest(channel.value)

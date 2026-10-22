@@ -13,19 +13,23 @@ import org.commonmark.renderer.html.HtmlRenderer
  * used by live update checks. The API's rendered HTML is only a fallback.
  */
 class ReadmeApi(private val client: OkHttpClient) {
+    data class Document(val markdown: String?, val html: String)
+
     private val parser = Parser.builder().build()
     private val renderer = HtmlRenderer.builder()
         .extensions(listOf(TablesExtension.create()))
         .build()
 
-    suspend fun fetchHtml(repoFullName: String): String? = withContext(Dispatchers.IO) {
+    fun renderMarkdown(markdown: String): String = renderer.render(parser.parse(markdown))
+
+    suspend fun fetch(repoFullName: String): Document? = withContext(Dispatchers.IO) {
         for (name in README_NAMES) {
             val raw = fetchText("https://raw.githubusercontent.com/$repoFullName/HEAD/$name")
             if (!raw.isNullOrBlank()) {
-                return@withContext renderer.render(parser.parse(raw))
+                return@withContext Document(raw, renderMarkdown(raw))
             }
         }
-        fetchApiHtml(repoFullName)
+        fetchApiHtml(repoFullName)?.let { Document(null, it) }
     }
 
     private fun fetchText(url: String): String? {

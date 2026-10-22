@@ -36,9 +36,11 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,6 +78,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.ModuleUpdate
+import com.rushi.modulesmanager.ReadmeTranslationState
 import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
@@ -105,6 +108,7 @@ fun ModuleDetailScreen(
     val installedVersions by viewModel.installedVersions.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
+    val readmeTranslation by viewModel.readmeTranslation.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
@@ -226,6 +230,8 @@ fun ModuleDetailScreen(
                     0 -> OverviewTab(
                         module = module,
                         installing = loading,
+                        translation = readmeTranslation,
+                        onTranslate = viewModel::translateReadme,
                         onOpenLink = viewModel::openLink,
                     )
                     1 -> ReleasesTab(
@@ -392,10 +398,12 @@ private fun DetailHeader(
 private fun OverviewTab(
     module: RepoModule,
     installing: Boolean,
+    translation: ReadmeTranslationState?,
+    onTranslate: () -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
     val readme = module.readmeHtml
-    if (readme.isNullOrBlank()) {
+    if (readme.isNullOrBlank() && translation?.html == null) {
         val fallback = module.readme ?: module.summary
         if (fallback.isNullOrBlank()) {
             EmptyState(
@@ -415,12 +423,71 @@ private fun OverviewTab(
         }
         return
     }
-    ReadmeWebView(
-        html = readme,
-        repoFullName = module.githubRepoFullName(),
-        onOpenLink = onOpenLink,
-        modifier = Modifier.fillMaxSize(),
-    )
+    var showOriginal by rememberSaveable(module.packageName) { mutableStateOf(false) }
+    val html = translation?.html?.takeUnless { showOriginal } ?: readme
+    Column(modifier = Modifier.fillMaxSize()) {
+        ReadmeTranslateBar(
+            translation = translation,
+            showOriginal = showOriginal,
+            onTranslate = onTranslate,
+            onToggleOriginal = { showOriginal = !showOriginal },
+        )
+        if (html != null) {
+            ReadmeWebView(
+                html = html,
+                repoFullName = module.githubRepoFullName(),
+                onOpenLink = onOpenLink,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReadmeTranslateBar(
+    translation: ReadmeTranslationState?,
+    showOriginal: Boolean,
+    onTranslate: () -> Unit,
+    onToggleOriginal: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            translation?.html != null -> TextButton(onClick = onToggleOriginal) {
+                Text(if (showOriginal) "Show translation" else "Show original")
+            }
+            translation?.loading == true -> Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (translation.progress > 0f) {
+                        "Translating ${(translation.progress * 100).toInt()}%"
+                    } else {
+                        "Preparing translation..."
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            else -> TextButton(onClick = onTranslate) {
+                Icon(
+                    imageVector = Icons.Outlined.Translate,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Translate")
+            }
+        }
+    }
 }
 
 @Composable
