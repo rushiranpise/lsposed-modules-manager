@@ -26,9 +26,11 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -58,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.ModuleUpdate
+import com.rushi.modulesmanager.TranslationState
 import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.RepoModule
@@ -96,6 +100,7 @@ fun RepoListScreen(
     val updatesFirst by viewModel.updatesFirst.collectAsStateWithLifecycle()
     val installedVersions by viewModel.installedVersions.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
+    val translations by viewModel.translations.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -305,6 +310,13 @@ fun RepoListScreen(
                                     installed = installedByPackage[module.packageName],
                                     update = updatesByPackage[module.packageName],
                                     channel = channel,
+                                    translation = translations[module.packageName] ?: remember(
+                                        module.packageName,
+                                        module.summary,
+                                    ) {
+                                        viewModel.cachedTranslation(module)?.let { TranslationState(text = it) }
+                                    },
+                                    onTranslate = { viewModel.translate(module) },
                                     onClick = { onOpenModule(module.packageName) },
                                 )
                             }
@@ -342,12 +354,58 @@ fun RepoListScreen(
 }
 
 @Composable
+private fun TranslationLine(translation: TranslationState?, onTranslate: () -> Unit) {
+    when {
+        translation?.text != null -> {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    imageVector = Icons.Outlined.Translate,
+                    contentDescription = "Translated",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 2.dp).size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = translation.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        translation?.loading == true -> {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Translating",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        else -> TextButton(
+            onClick = onTranslate,
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+            modifier = Modifier.height(32.dp),
+        ) {
+            Icon(Icons.Outlined.Translate, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Translate", style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
 private fun ModuleCard(
     module: RepoModule,
     latest: ModuleVersion?,
     installed: InstalledPackageVersion?,
     update: ModuleUpdate?,
     channel: UpdateChannel,
+    translation: TranslationState?,
+    onTranslate: () -> Unit,
     onClick: () -> Unit,
 ) {
     Card(
@@ -377,6 +435,7 @@ private fun ModuleCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    TranslationLine(translation = translation, onTranslate = onTranslate)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(

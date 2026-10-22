@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("modules_manager", Context.MODE_PRIVATE)
+    private val translationPrefs = context.getSharedPreferences("translation_cache", Context.MODE_PRIVATE)
 
     private val _channel = MutableStateFlow(UpdateChannel.fromKey(prefs.getString(KEY_CHANNEL, null)))
     val channel: StateFlow<UpdateChannel> = _channel.asStateFlow()
@@ -68,6 +69,12 @@ class Settings(context: Context) {
 
     fun setLastLiveCheck(time: Long) {
         prefs.edit().putLong(KEY_LAST_LIVE_CHECK, time).apply()
+    }
+
+    fun cachedTranslation(key: String): String? = translationPrefs.getString(key, null)
+
+    fun saveTranslation(key: String, text: String) {
+        translationPrefs.edit().putString(key, text).apply()
     }
 
     private companion object {

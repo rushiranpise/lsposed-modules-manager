@@ -23,6 +23,7 @@ import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.SortMode
+import com.rushi.modulesmanager.data.TranslateApi
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.data.userMessage
 import kotlinx.coroutines.CancellationException
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -50,6 +52,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class ModuleUpdate(
@@ -57,6 +60,8 @@ data class ModuleUpdate(
     val module: RepoModule,
     val version: ModuleVersion,
 )
+
+data class TranslationState(val text: String? = null, val loading: Boolean = false)
 
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
@@ -96,6 +101,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages = _messages.asSharedFlow()
+
+    private val _translations = MutableStateFlow<Map<String, TranslationState>>(emptyMap())
+    val translations: StateFlow<Map<String, TranslationState>> = _translations.asStateFlow()
 
     private val _detail = MutableStateFlow<RepoModule?>(null)
     val detail: StateFlow<RepoModule?> = _detail.asStateFlow()
@@ -582,6 +590,47 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         downloadJob?.cancel()
         container.downloads.update(null)
     }
+
+    fun cachedTranslation(module: RepoModule): String? = settings.cachedTranslation(
+        translationKey(module, targetLanguage(), module.summary.orEmpty()),
+    )
+
+    fun translate(module: RepoModule) {
+        val summary = module.summary?.trim().orEmpty()
+        if (summary.isEmpty()) {
+            message("This module has no description to translate")
+            return
+        }
+        if (_translations.value[module.packageName]?.loading == true) return
+
+        val target = targetLanguage()
+        _translations.update { it + (module.packageName to TranslationState(loading = true)) }
+        viewModelScope.launch {
+            try {
+                val result = TranslateApi.translateTo(summary, target)
+                if (result.text == summary) {
+                    _translations.update { it - module.packageName }
+                    message("This description is already in ${displayLanguage(target)}")
+                    return@launch
+                }
+                settings.saveTranslation(translationKey(module, target, summary), result.text)
+                _translations.update {
+                    it + (module.packageName to TranslationState(text = result.text))
+                }
+            } catch (e: Exception) {
+                _translations.update { it - module.packageName }
+                message(e.message ?: "Translation failed")
+            }
+        }
+    }
+
+    private fun targetLanguage(): String = Locale.getDefault().language
+
+    private fun displayLanguage(tag: String): String =
+        Locale.forLanguageTag(tag).getDisplayLanguage(Locale.getDefault()).ifBlank { tag }
+
+    private fun translationKey(module: RepoModule, target: String, text: String): String =
+        "${module.packageName}:$target:${text.hashCode()}"
 
     fun openInstalledModule(packageName: String) {
         if (!container.scanner.openModule(packageName)) {

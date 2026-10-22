@@ -93,6 +93,8 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.commonmark:commonmark:0.31.0")
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.31.0")
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 
