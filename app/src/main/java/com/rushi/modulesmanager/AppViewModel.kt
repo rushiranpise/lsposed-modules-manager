@@ -483,10 +483,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     container.repo.cachedReadmeTranslation(packageName, target)
                 }
                 if (!cached.isNullOrBlank()) {
-                    val html = withContext(Dispatchers.Default) {
-                        container.readmeApi.renderMarkdown(cached)
-                    }
-                    _readmeTranslation.value = ReadmeTranslationState(html = html, language = target)
+                    _readmeTranslation.value = ReadmeTranslationState(html = cached, language = target)
                     return@launch
                 }
 
@@ -505,14 +502,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     message("This README is already in ${displayLanguage(target)}")
                     return@launch
                 }
-                val html = withContext(Dispatchers.Default) {
-                    container.readmeApi.renderMarkdown(result.markdown)
-                }
                 withContext(Dispatchers.IO) {
-                    container.repo.saveReadmeTranslation(packageName, target, result.markdown)
+                    container.repo.saveReadmeTranslation(packageName, target, result.html)
                 }
                 if (_detail.value?.packageName != packageName) return@launch
-                _readmeTranslation.value = ReadmeTranslationState(html = html, language = target)
+                _readmeTranslation.value = ReadmeTranslationState(html = result.html, language = target)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

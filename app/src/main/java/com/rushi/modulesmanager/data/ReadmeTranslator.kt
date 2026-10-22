@@ -1,23 +1,28 @@
 package com.rushi.modulesmanager.data
 
 import com.google.mlkit.nl.translate.TranslateLanguage
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.node.Node
+import org.commonmark.node.Text
+import org.commonmark.parser.Parser
+import org.commonmark.renderer.html.HtmlRenderer
 
 /**
- * Translates a Markdown README on-device. Fenced code blocks, inline code and URLs are swapped
- * for tokens before translating and put back afterwards, so code and links survive intact.
+ * Translates a Markdown README on-device. Only prose nodes are sent to the translator, so links,
+ * images, code blocks and HTML blocks keep their exact syntax and still render correctly.
  */
 object ReadmeTranslator {
-    data class Result(val markdown: String, val sourceLanguage: String, val translated: Boolean)
+    data class Result(val html: String, val sourceLanguage: String, val translated: Boolean)
 
-    // Plain ASCII markers survive the on-device models better than private-use characters.
-    private const val OPEN = "ZQXZ"
-    private const val CLOSE = "ZQXZ"
-    private const val MAX_CHUNK = 2800
+    private const val MAX_PART = 3000
     private const val SAMPLE_CHARS = 1200
 
-    private val TOKEN = Regex("$OPEN\\s*(\\d+)\\s*$CLOSE")
-    private val INLINE_CODE = Regex("`[^`\\n]+`")
-    private val URL = Regex("""https?://[^\s)\]>"']+""")
+    private val parser = Parser.builder()
+        .extensions(listOf(TablesExtension.create()))
+        .build()
+    private val renderer = HtmlRenderer.builder()
+        .extensions(listOf(TablesExtension.create()))
+        .build()
 
     suspend fun translate(
         markdown: String,
@@ -27,113 +32,74 @@ object ReadmeTranslator {
         val target = TranslateLanguage.fromLanguageTag(targetTag)
             ?: throw IllegalStateException("Translation is not available for this language")
 
-        val tokenized = tokenize(markdown)
-        val source = TranslateApi.identify(stripTokens(tokenized.text).take(SAMPLE_CHARS))
+        val document = parser.parse(markdown)
+        val nodes = collectTextNodes(document).filter { it.literal.isNotBlank() }
+        if (nodes.isEmpty()) {
+            throw IllegalStateException("This README has no text that can be translated")
+        }
+
+        val source = TranslateApi.identify(nodes.joinToString(" ") { it.literal }.take(SAMPLE_CHARS))
             ?: throw IllegalStateException("Could not detect the README language")
-        if (source == target) return Result(markdown, source, translated = false)
+        if (source == target) return Result("", source, translated = false)
 
-        val chunks = chunk(tokenized.text, MAX_CHUNK)
-        val translated = TranslateApi.translateChunks(chunks, source, target, onProgress)
-        return Result(restore(translated, chunks, tokenized.tokens), source, translated = true)
+        val groups = nodes.map { node -> Group(node, splitLong(node.literal)) }
+        val flat = groups.flatMap { group -> group.parts.indices.map { group to it } }
+        val translated = TranslateApi.translateChunks(
+            chunks = flat.map { (group, index) -> group.parts[index] },
+            sourceLanguage = source,
+            targetTag = target,
+            onProgress = onProgress,
+        )
+
+        val byGroup = HashMap<Group, MutableMap<Int, String>>()
+        translated.forEachIndexed { index, text ->
+            val (group, part) = flat[index]
+            byGroup.getOrPut(group) { HashMap() }[part] = text
+        }
+        groups.forEach { group ->
+            val replacements = byGroup[group].orEmpty()
+            group.node.literal = group.parts.indices.joinToString(" ") { index ->
+                replacements[index] ?: group.parts[index]
+            }
+        }
+
+        return Result(renderer.render(document), source, translated = true)
     }
 
-    internal data class Tokenized(val text: String, val tokens: List<String>)
+    /** Plain prose of the document, for tests and nothing else. */
+    internal fun proseOf(markdown: String): List<String> =
+        collectTextNodes(parser.parse(markdown)).map { it.literal }
 
-    /** Replaces everything that must not be translated with a numbered token. */
-    internal fun tokenize(markdown: String): Tokenized {
-        val tokens = mutableListOf<String>()
-
-        fun protect(value: String): String {
-            tokens += value
-            return "$OPEN${tokens.lastIndex}$CLOSE"
+    private fun collectTextNodes(root: Node): List<Text> {
+        val out = mutableListOf<Text>()
+        fun walk(node: Node) {
+            var child = node.firstChild
+            while (child != null) {
+                if (child is Text) out += child else walk(child)
+                child = child.next
+            }
         }
-
-        val out = StringBuilder()
-        var fence: String? = null
-        for (line in markdown.lines()) {
-            val trimmed = line.trimStart()
-            if (fence != null) {
-                out.append(protect(line)).append('\n')
-                val closing = line.trim()
-                if (closing.length >= 3 && closing.all { it == fence.first() }) fence = null
-                continue
-            }
-            val marker = when {
-                trimmed.startsWith("```") -> "```"
-                trimmed.startsWith("~~~") -> "~~~"
-                else -> null
-            }
-            if (marker != null) {
-                fence = marker
-                out.append(protect(line)).append('\n')
-                continue
-            }
-            var prose = line
-            prose = INLINE_CODE.replace(prose) { protect(it.value) }
-            prose = URL.replace(prose) { protect(it.value) }
-            out.append(prose).append('\n')
-        }
-        return Tokenized(out.toString(), tokens)
+        walk(root)
+        return out
     }
 
-    private fun stripTokens(text: String): String = TOKEN.replace(text, " ")
+    private class Group(val node: Text, val parts: List<String>)
 
-    internal fun chunk(text: String, max: Int): List<String> {
-        val chunks = mutableListOf<String>()
-        val current = StringBuilder()
-        fun flush() {
-            if (current.isNotEmpty()) {
-                chunks += current.toString()
-                current.clear()
-            }
-        }
-        for (line in text.split('\n')) {
-            val pieces = if (line.length > max) splitLong(line, max) else listOf(line)
-            for (piece in pieces) {
-                val extra = if (current.isEmpty()) piece.length else piece.length + 1
-                if (current.length + extra > max) flush()
-                if (current.isNotEmpty()) current.append('\n')
-                current.append(piece)
-            }
-        }
-        flush()
-        return if (chunks.isEmpty()) listOf(text) else chunks
-    }
-
-    private fun splitLong(line: String, max: Int): List<String> {
-        val pieces = mutableListOf<String>()
+    /** Splits a very long text node so no request exceeds the translation limit. */
+    private fun splitLong(text: String): List<String> {
+        if (text.length <= MAX_PART) return listOf(text)
+        val parts = mutableListOf<String>()
         var start = 0
-        while (start < line.length) {
-            var end = minOf(start + max, line.length)
-            if (end < line.length) {
-                val space = line.lastIndexOf(' ', end)
+        while (start < text.length) {
+            var end = minOf(start + MAX_PART, text.length)
+            if (end < text.length) {
+                val space = text.lastIndexOf(' ', end)
                 if (space > start) end = space
             }
-            // Never cut a placeholder in half; the translator would drop the link.
-            val candidate = line.substring(start, end)
-            val open = candidate.lastIndexOf(OPEN)
-            if (open > 0 && candidate.indexOf(CLOSE, open) < 0) {
-                end = start + open
-            }
-            val piece = line.substring(start, end).trim()
-            if (piece.isNotEmpty()) pieces += piece
-            start = if (end <= start) start + max else end
+            val part = text.substring(start, end).trim()
+            if (part.isNotEmpty()) parts += part
+            start = if (end <= start) start + MAX_PART else end
         }
-        return pieces
+        return parts.ifEmpty { listOf(text) }
     }
-
-    internal fun restore(translated: List<String>, originals: List<String>, tokens: List<String>): String {
-        val body = translated.indices.joinToString("\n") { index ->
-            val translatedChunk = translated[index]
-            val original = originals.getOrElse(index) { translatedChunk }
-            // A chunk whose placeholders went missing is kept in its original form.
-            val kept = if (countTokens(translatedChunk) == countTokens(original)) translatedChunk else original
-            kept
-        }
-        return TOKEN.replace(body) { match ->
-            tokens.getOrNull(match.groupValues[1].toIntOrNull() ?: -1) ?: match.value
-        }
-    }
-
-    private fun countTokens(text: String): Int = TOKEN.findAll(text).count()
 }

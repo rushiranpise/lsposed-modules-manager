@@ -141,12 +141,13 @@ class RepoRepository(
     /** The raw Markdown behind the cached README, needed to translate it. */
     fun cachedReadmeMarkdown(packageName: String): String? = cachedReadmeText(packageName, "md")
 
+    /** A translated README is stored as rendered HTML, ready to show again. */
     fun cachedReadmeTranslation(packageName: String, language: String): String? =
-        cachedReadmeText(packageName, "${language.sanitizeLanguage()}.md")
+        cachedReadmeText(packageName, "${language.sanitizeLanguage()}.html")
 
-    fun saveReadmeTranslation(packageName: String, language: String, markdown: String) {
+    fun saveReadmeTranslation(packageName: String, language: String, html: String) {
         runCatching {
-            readmeFile(packageName, "${language.sanitizeLanguage()}.md").writeText(markdown)
+            readmeFile(packageName, "${language.sanitizeLanguage()}.html").writeText(html)
         }
     }
 

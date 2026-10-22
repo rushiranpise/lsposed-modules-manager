@@ -20,7 +20,7 @@ class ReadmeApi(private val client: OkHttpClient) {
         .extensions(listOf(TablesExtension.create()))
         .build()
 
-    fun renderMarkdown(markdown: String): String = renderer.render(parser.parse(markdown))
+    private fun renderMarkdown(markdown: String): String = renderer.render(parser.parse(markdown))
 
     suspend fun fetch(repoFullName: String): Document? = withContext(Dispatchers.IO) {
         for (name in README_NAMES) {
