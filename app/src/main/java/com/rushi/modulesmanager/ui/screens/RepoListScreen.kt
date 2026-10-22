@@ -102,6 +102,7 @@ fun RepoListScreen(
     val installedVersions by viewModel.installedVersions.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val translations by viewModel.translations.collectAsStateWithLifecycle()
+    val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -314,6 +315,7 @@ fun RepoListScreen(
                                     translation = translations[module.packageName] ?: remember(
                                         module.packageName,
                                         module.summary,
+                                        translateLanguage,
                                     ) {
                                         viewModel.cachedTranslation(module)?.let { TranslationState(text = it) }
                                     },

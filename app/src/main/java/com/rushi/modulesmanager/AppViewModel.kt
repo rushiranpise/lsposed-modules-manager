@@ -25,6 +25,7 @@ import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.SortMode
 import com.rushi.modulesmanager.data.TranslateApi
+import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.data.userMessage
 import kotlinx.coroutines.CancellationException
@@ -83,6 +84,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val amoled: StateFlow<Boolean> = settings.amoled
     val systemColors: StateFlow<Boolean> = settings.systemColors
     val updatesFirst: StateFlow<Boolean> = settings.updatesFirst
+    val autoTranslate: StateFlow<Boolean> = settings.autoTranslate
+    val translateLanguage: StateFlow<String?> = settings.translateLanguage
 
     private val _shizukuStatus = MutableStateFlow(ShizukuInstaller.status())
     val shizukuStatus: StateFlow<ShizukuInstaller.Status> = _shizukuStatus.asStateFlow()
@@ -169,6 +172,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 // The live releases are held in memory, so a fresh process has to check once even
                 // when the saved timestamp is still inside the six-hour window.
                 if (installed.isNotEmpty()) refreshLiveUpdates(force = !liveCheckAttempted)
+            }
+        }
+        viewModelScope.launch {
+            combine(settings.autoTranslate, settings.translateLanguage, modules) { auto, language, list ->
+                Triple(auto, language, list)
+            }.collect { (auto, language, list) ->
+                if (auto) autoTranslateDescriptions(list, language)
             }
         }
     }
@@ -455,6 +465,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     }
                 }
             }
+
+            if (settings.autoTranslate.value && _detail.value?.packageName == packageName) {
+                translateReadme(announce = false)
+            }
         }
     }
 
@@ -468,7 +482,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Translates the open README on demand, reusing a saved translation when there is one. */
-    fun translateReadme() {
+    fun translateReadme(announce: Boolean = true) {
         val module = _detail.value ?: return
         if (readmeTranslationJob?.isActive == true) return
         val packageName = module.packageName
@@ -490,7 +504,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 val markdown = readmeMarkdown(module)
                 if (markdown.isNullOrBlank()) {
                     _readmeTranslation.value = null
-                    message("This README has no Markdown text that can be translated")
+                    if (announce) message("This README has no Markdown text that can be translated")
                     return@launch
                 }
 
@@ -499,7 +513,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 if (!result.translated) {
                     _readmeTranslation.value = null
-                    message("This README is already in ${displayLanguage(target)}")
+                    if (announce) message("This README is already in ${displayLanguage(target)}")
                     return@launch
                 }
                 withContext(Dispatchers.IO) {
@@ -511,7 +525,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 _readmeTranslation.value = null
-                message(e.message ?: "Could not translate this README")
+                if (announce) message(e.message ?: "Could not translate this README")
             }
         }
     }
@@ -682,24 +696,67 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         if (_translations.value[module.packageName]?.loading == true) return
 
-        val target = targetLanguage()
         _translations.update { it + (module.packageName to TranslationState(loading = true)) }
-        viewModelScope.launch {
-            try {
-                val result = TranslateApi.translateTo(summary, target)
-                if (result.text == summary) {
-                    _translations.update { it - module.packageName }
-                    message("This description is already in ${displayLanguage(target)}")
-                    return@launch
+        viewModelScope.launch { translateDescription(module, announce = true) }
+    }
+
+    fun setAutoTranslate(enabled: Boolean) {
+        settings.setAutoTranslate(enabled)
+    }
+
+    fun setTranslateLanguage(language: String?) {
+        settings.setTranslateLanguage(language)
+        _translations.value = emptyMap()
+        _readmeTranslation.value = null
+        readmeTranslationJob?.cancel()
+    }
+
+    /** Translates descriptions that have no saved translation yet, two at a time. */
+    private suspend fun autoTranslateDescriptions(modules: List<RepoModule>, language: String?) {
+        val target = language ?: Locale.getDefault().language
+        if (!TranslationLanguages.isSupported(target)) return
+
+        val semaphore = Semaphore(2)
+        coroutineScope {
+            modules.mapNotNull { module ->
+                val summary = module.summary?.trim().orEmpty()
+                if (summary.isEmpty()) return@mapNotNull null
+                if (settings.cachedTranslation(translationKey(module, target, summary)) != null) {
+                    return@mapNotNull null
                 }
-                settings.saveTranslation(translationKey(module, target, summary), result.text)
-                _translations.update {
-                    it + (module.packageName to TranslationState(text = result.text))
+                if (_translations.value[module.packageName]?.loading == true) return@mapNotNull null
+                async {
+                    semaphore.withPermit {
+                        if (!settings.autoTranslate.value) return@withPermit
+                        _translations.update {
+                            it + (module.packageName to TranslationState(loading = true))
+                        }
+                        translateDescription(module, announce = false)
+                    }
                 }
-            } catch (e: Exception) {
+            }.awaitAll()
+        }
+    }
+
+    private suspend fun translateDescription(module: RepoModule, announce: Boolean) {
+        val summary = module.summary?.trim().orEmpty()
+        val target = targetLanguage()
+        try {
+            val result = TranslateApi.translateTo(summary, target)
+            if (result.text == summary) {
                 _translations.update { it - module.packageName }
-                message(e.message ?: "Translation failed")
+                if (announce) message("This description is already in ${displayLanguage(target)}")
+                return
             }
+            settings.saveTranslation(translationKey(module, target, summary), result.text)
+            _translations.update {
+                it + (module.packageName to TranslationState(text = result.text))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _translations.update { it - module.packageName }
+            if (announce) message(e.message ?: "Translation failed")
         }
     }
 
@@ -709,7 +766,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         _translations.update { it + (module.packageName to TranslationState()) }
     }
 
-    private fun targetLanguage(): String = Locale.getDefault().language
+    private fun targetLanguage(): String =
+        settings.translateLanguage.value ?: Locale.getDefault().language
 
     private fun displayLanguage(tag: String): String =
         Locale.forLanguageTag(tag).getDisplayLanguage(Locale.getDefault()).ifBlank { tag }

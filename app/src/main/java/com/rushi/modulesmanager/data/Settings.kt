@@ -30,6 +30,15 @@ class Settings(context: Context) {
     private val _updatesFirst = MutableStateFlow(prefs.getBoolean(KEY_UPDATES_FIRST, true))
     val updatesFirst: StateFlow<Boolean> = _updatesFirst.asStateFlow()
 
+    private val _autoTranslate = MutableStateFlow(prefs.getBoolean(KEY_AUTO_TRANSLATE, false))
+    val autoTranslate: StateFlow<Boolean> = _autoTranslate.asStateFlow()
+
+    /** Null means the device language. */
+    private val _translateLanguage = MutableStateFlow(
+        prefs.getString(KEY_TRANSLATE_LANGUAGE, null)?.takeIf { it.isNotBlank() },
+    )
+    val translateLanguage: StateFlow<String?> = _translateLanguage.asStateFlow()
+
     fun setChannel(channel: UpdateChannel) {
         prefs.edit().putString(KEY_CHANNEL, channel.key).apply()
         _channel.value = channel
@@ -48,6 +57,16 @@ class Settings(context: Context) {
     fun setUpdatesFirst(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_UPDATES_FIRST, enabled).apply()
         _updatesFirst.value = enabled
+    }
+
+    fun setAutoTranslate(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_TRANSLATE, enabled).apply()
+        _autoTranslate.value = enabled
+    }
+
+    fun setTranslateLanguage(language: String?) {
+        prefs.edit().putString(KEY_TRANSLATE_LANGUAGE, language).apply()
+        _translateLanguage.value = language
     }
 
     fun setTheme(theme: AppTheme) {
@@ -85,6 +104,8 @@ class Settings(context: Context) {
         const val KEY_AMOLED = "amoled_mode"
         const val KEY_SYSTEM_COLORS = "system_colors"
         const val KEY_UPDATES_FIRST = "updates_first"
+        const val KEY_AUTO_TRANSLATE = "auto_translate"
+        const val KEY_TRANSLATE_LANGUAGE = "translate_language"
         const val KEY_LAST_LIVE_CHECK = "last_live_check"
     }
 }

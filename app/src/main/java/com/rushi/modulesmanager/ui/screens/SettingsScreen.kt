@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,9 +21,11 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.InstallMobile
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +53,7 @@ import com.rushi.modulesmanager.BuildConfig
 import com.rushi.modulesmanager.data.AppTheme
 import com.rushi.modulesmanager.data.InstallerType
 import com.rushi.modulesmanager.data.ShizukuInstaller
+import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.ui.components.HeaderDivider
 
@@ -61,10 +65,13 @@ fun SettingsScreen(viewModel: AppViewModel) {
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val amoled by viewModel.amoled.collectAsStateWithLifecycle()
     val systemColors by viewModel.systemColors.collectAsStateWithLifecycle()
+    val autoTranslate by viewModel.autoTranslate.collectAsStateWithLifecycle()
+    val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
 
     var showChannelDialog by remember { mutableStateOf(false) }
     var showInstallerDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(showInstallerDialog) {
         if (showInstallerDialog) viewModel.refreshShizukuStatus()
@@ -111,6 +118,26 @@ fun SettingsScreen(viewModel: AppViewModel) {
                 title = "Theme",
                 subtitle = "${theme.label} - ${theme.description}",
                 onClick = { showThemeDialog = true },
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            SectionTitle("Translation")
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Translate,
+                title = "Translate automatically",
+                subtitle = "Translate module descriptions and READMEs when they load",
+                checked = autoTranslate,
+                onCheckedChange = viewModel::setAutoTranslate,
+            )
+            SettingsRow(
+                icon = Icons.Outlined.Language,
+                title = "Language",
+                subtitle = if (translateLanguage == null) {
+                    "${TranslationLanguages.selectedLabel(null)} (device language)"
+                } else {
+                    TranslationLanguages.selectedLabel(translateLanguage)
+                },
+                onClick = { showLanguageDialog = true },
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -240,6 +267,42 @@ fun SettingsScreen(viewModel: AppViewModel) {
         )
     }
 
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Translation language") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    LanguageOption(
+                        label = "Device language",
+                        selected = translateLanguage == null,
+                        onClick = {
+                            viewModel.setTranslateLanguage(null)
+                            showLanguageDialog = false
+                        },
+                    )
+                    TranslationLanguages.all().forEach { (tag, name) ->
+                        LanguageOption(
+                            label = name,
+                            selected = translateLanguage == tag,
+                            onClick = {
+                                viewModel.setTranslateLanguage(tag)
+                                showLanguageDialog = false
+                            },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) { Text("Close") }
+            },
+        )
+    }
+
     if (showInstallerDialog) {
         AlertDialog(
             onDismissRequest = { showInstallerDialog = false },
@@ -326,6 +389,20 @@ fun SettingsScreen(viewModel: AppViewModel) {
         )
     }
 
+}
+
+@Composable
+private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
 }
 
 @Composable
