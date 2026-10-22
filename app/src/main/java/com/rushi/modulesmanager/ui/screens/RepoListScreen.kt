@@ -44,7 +44,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -366,25 +365,34 @@ private fun DescriptionBlock(
     onShowOriginal: () -> Unit,
 ) {
     val translated = translation?.text
+    val loading = translation?.loading == true
     Spacer(Modifier.height(6.dp))
     Row(verticalAlignment = Alignment.Top) {
-        if (translated != null) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 1.dp)
-                    .size(20.dp)
-                    .clickable(onClick = onShowOriginal),
-                contentAlignment = Alignment.Center,
-            ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(20.dp)
+                .clickable(enabled = !loading) {
+                    if (translated != null) onShowOriginal() else onTranslate()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (loading) {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            } else {
                 Icon(
                     imageVector = Icons.Outlined.Translate,
-                    contentDescription = "Show original",
-                    tint = MaterialTheme.colorScheme.primary,
+                    contentDescription = if (translated != null) "Show original" else "Translate",
+                    tint = if (translated != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     modifier = Modifier.size(14.dp),
                 )
             }
-            Spacer(Modifier.width(6.dp))
         }
+        Spacer(Modifier.width(6.dp))
         Text(
             text = translated ?: summary,
             style = MaterialTheme.typography.bodySmall,
@@ -397,30 +405,6 @@ private fun DescriptionBlock(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-    }
-    when {
-        translated != null -> Unit
-        translation?.loading == true -> {
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Translating",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        else -> TextButton(
-            onClick = onTranslate,
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-            modifier = Modifier.height(32.dp),
-        ) {
-            Icon(Icons.Outlined.Translate, contentDescription = null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Translate", style = MaterialTheme.typography.labelMedium)
-        }
     }
 }
 
