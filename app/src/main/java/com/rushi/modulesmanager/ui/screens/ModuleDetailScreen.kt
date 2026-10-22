@@ -346,6 +346,13 @@ private fun DetailHeader(
     val updateVersion = update?.version
     val hasUpdate = updateVersion != null
     val isInstalled = installedVersion != null
+    val latestDate = formatDate(module.latestTime(channel))
+    // Installed modules already show their version in the pills below.
+    val latestLabel = when {
+        latest == null -> ""
+        isInstalled -> latestDate?.let { "Released $it" }.orEmpty()
+        else -> "Latest ${latest.name}" + (latestDate?.let { " - $it" } ?: "")
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -364,6 +371,14 @@ private fun DetailHeader(
                 )
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
+                if (latestLabel.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = latestLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
@@ -382,24 +397,6 @@ private fun DetailHeader(
                         StatusPill(text = "Installed ${shortVersion(installedVersion)}".trim())
                     }
                 }
-            }
-        }
-
-        val latestDate = formatDate(module.latestTime(channel))
-        if (latest != null) {
-            // Installed modules already show their version in the pills above.
-            val label = if (isInstalled) {
-                latestDate?.let { "Released $it" }.orEmpty()
-            } else {
-                "Latest ${latest.name}" + (latestDate?.let { " - $it" } ?: "")
-            }
-            if (label.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 
