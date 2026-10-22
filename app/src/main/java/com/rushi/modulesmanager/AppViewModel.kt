@@ -412,9 +412,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
             _detailLoading.value = false
 
-            // The daily index does not carry the README, so fetch it from GitHub on demand.
+            // The daily index does not carry the README. Show the last one from disk first,
+            // then refresh it from GitHub when available.
             val module = _detail.value
             if (module != null && module.readmeHtml.isNullOrBlank()) {
+                val cached = withContext(Dispatchers.IO) {
+                    container.repo.cachedReadme(packageName)
+                }
+                if (!cached.isNullOrBlank() && _detail.value?.packageName == packageName) {
+                    container.repo.applyReadme(packageName, cached)
+                    _detail.value = _detail.value?.copy(readmeHtml = cached)
+                }
+
                 val repoFullName = module.githubRepoFullName()
                 if (repoFullName != null) {
                     val html = container.readmeApi.fetchHtml(repoFullName)

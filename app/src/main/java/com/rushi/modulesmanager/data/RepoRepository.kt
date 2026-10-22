@@ -129,6 +129,22 @@ class RepoRepository(
             if (module.packageName == packageName) module.copy(readmeHtml = html) else module
         }
         details[packageName]?.let { details[packageName] = it.copy(readmeHtml = html) }
+        runCatching { readmeFile(packageName).writeText(html) }
+    }
+
+    /** Returns the last README fetched for this package, surviving app restarts. */
+    fun cachedReadme(packageName: String): String? {
+        val file = readmeFile(packageName)
+        if (!file.isFile) return null
+        return runCatching { file.readText().takeIf { it.isNotBlank() } }.getOrNull()
+    }
+
+    private fun readmeFile(packageName: String): File {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(packageName.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+            .substring(0, 16)
+        return File(context.filesDir, "readme-cache").apply { mkdirs() }.resolve("$digest.html")
     }
 
     fun cachedModule(packageName: String): RepoModule? =
