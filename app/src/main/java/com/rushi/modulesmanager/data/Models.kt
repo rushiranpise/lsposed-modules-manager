@@ -90,6 +90,8 @@ data class RepoModule(
     val stargazerCount: Int,
     /** GitHub repo that hosts releases, used for live update checks. */
     val repoFullName: String? = null,
+    /** Full release list fetched for the Releases tab. */
+    val releaseHistory: List<RepoRelease> = emptyList(),
 ) {
     val hasReleases: Boolean
         get() = releases.isNotEmpty() || betaReleases.isNotEmpty() || snapshotReleases.isNotEmpty()
@@ -104,6 +106,12 @@ data class RepoModule(
         UpdateChannel.STABLE -> latestReleaseTime
         UpdateChannel.PRE_RELEASE -> latestBetaReleaseTime ?: latestReleaseTime
     }
+
+    /** Every release the repository published, newest first, whichever channel it belongs to. */
+    fun allReleases(): List<RepoRelease> =
+        (releases + betaReleases + snapshotReleases + releaseHistory)
+            .distinctBy { it.url ?: it.tagName ?: it.name }
+            .sortedByDescending { parseInstant(it.publishedAt) ?: Instant.EPOCH }
 
     fun releasesFor(channel: UpdateChannel): List<RepoRelease> {
         val pool = when (channel) {

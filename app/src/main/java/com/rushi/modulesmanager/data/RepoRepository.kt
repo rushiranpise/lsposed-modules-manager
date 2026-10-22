@@ -110,17 +110,29 @@ class RepoRepository(
 
     /** Replaces the daily release with a newer release fetched live from GitHub. */
     fun applyLiveRelease(packageName: String, tag: String, release: RepoRelease) {
+        fun RepoModule.merged(): RepoModule = copy(
+            latestRelease = tag,
+            latestReleaseTime = release.publishedAt,
+            releases = (listOf(release) + releases).distinctBy { it.url ?: it.tagName ?: it.name },
+        )
         _modules.value = _modules.value.map { module ->
-            if (module.packageName == packageName) {
-                module.copy(
-                    latestRelease = tag,
-                    latestReleaseTime = release.publishedAt,
-                    releases = listOf(release),
-                )
-            } else {
-                module
-            }
+            if (module.packageName == packageName) module.merged() else module
         }
+        details[packageName]?.let { details[packageName] = it.merged() }
+    }
+
+    /**
+     * Replaces the release lists with the full history from GitHub. The daily index keeps only
+     * the newest release per channel, and the live check only asks for the latest one.
+     */
+    fun applyReleaseHistory(packageName: String, all: List<RepoRelease>) {
+        if (all.isEmpty()) return
+        // Kept apart from the channel lists: the index owns the newest version per channel and
+        // the install button, so a stale source repo cannot change what gets installed.
+        _modules.value = _modules.value.map { module ->
+            if (module.packageName == packageName) module.copy(releaseHistory = all) else module
+        }
+        details[packageName]?.let { details[packageName] = it.copy(releaseHistory = all) }
     }
 
     /** Keeps a README fetched from GitHub so reopening a module does not fetch it again. */

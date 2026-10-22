@@ -17,6 +17,7 @@ import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.InstallerType
+import com.rushi.modulesmanager.data.LiveReleaseApi
 import com.rushi.modulesmanager.data.LiveUpdateRateLimitException
 import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.ReadmeTranslator
@@ -483,6 +484,33 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         container.repo.applyReadme(packageName, document.html, document.markdown)
                         _detail.value = _detail.value?.copy(readmeHtml = document.html)
                     }
+                }
+            }
+
+            // The daily index only carries the newest release per channel, so load the real
+            // history from GitHub for the Releases tab. The Xposed-Modules-Repo mirror keeps the
+            // release history, while the source repo can be stale or block the API.
+            val shown = _detail.value
+            if (shown != null) {
+                val candidates = listOfNotNull(
+                    "Xposed-Modules-Repo/${shown.packageName}",
+                    shown.repoFullName,
+                    shown.githubRepoFullName(),
+                ).distinct()
+                var history: List<LiveReleaseApi.LiveRelease> = emptyList()
+                for (repo in candidates) {
+                    val attempt = runCatching { container.liveApi.fetchAll(repo) }
+                    val found = attempt.getOrNull().orEmpty()
+                    if (found.isNotEmpty()) {
+                        history = found
+                        break
+                    }
+                    // Another repo cannot help when GitHub refused the request for rate limits.
+                    if (attempt.exceptionOrNull() is LiveUpdateRateLimitException) break
+                }
+                if (history.isNotEmpty() && _detail.value?.packageName == packageName) {
+                    container.repo.applyReleaseHistory(packageName, history.map { it.toRepoRelease() })
+                    _detail.value = container.repo.cachedModule(packageName)
                 }
             }
 

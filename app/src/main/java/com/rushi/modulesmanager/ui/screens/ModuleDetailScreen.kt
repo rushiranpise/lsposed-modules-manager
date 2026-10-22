@@ -283,7 +283,6 @@ fun ModuleDetailScreen(
                     )
                     1 -> ReleasesTab(
                         module = module,
-                        channel = channel,
                         loading = loading,
                         onInstall = { asset ->
                             viewModel.install(module, asset)
@@ -571,12 +570,11 @@ private fun wrapReadme(html: String, dark: Boolean): String {
 @Composable
 private fun ReleasesTab(
     module: RepoModule,
-    channel: UpdateChannel,
     loading: Boolean,
     onInstall: (RepoAsset) -> Unit,
     onOpenRelease: (String?) -> Unit,
 ) {
-    val releases = module.releasesFor(channel)
+    val releases = module.allReleases()
     if (releases.isEmpty()) {
         if (loading) {
             LoadingState("Loading releases...")
@@ -584,7 +582,7 @@ private fun ReleasesTab(
             EmptyState(
                 icon = Icons.Outlined.Info,
                 title = "No releases",
-                body = "No release of this module is available for the ${channel.label} channel.",
+                body = "This module has not published any releases on GitHub.",
             )
         }
         return
@@ -599,14 +597,6 @@ private fun ReleasesTab(
                 release = item,
                 onInstall = onInstall,
                 onOpenRelease = { onOpenRelease(item.url) },
-            )
-        }
-        item {
-            Text(
-                text = "Channel: ${channel.label}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

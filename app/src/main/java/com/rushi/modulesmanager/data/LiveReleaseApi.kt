@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -74,6 +75,57 @@ class LiveReleaseApi(
                 description = obj.optString("body").takeIf { it.isNotBlank() && it != "null" },
                 assets = assets,
             )
+        }
+    }
+
+    /**
+     * Every published release, newest first, including pre-releases. The daily index only keeps
+     * the newest release per channel, so the detail screen needs this to list release history.
+     * Returns null when the ETag matched and the caller should keep what it already shows.
+     */
+    suspend fun fetchAll(repoFullName: String): List<LiveRelease>? = withContext(Dispatchers.IO) {
+        val cacheKey = "all:$repoFullName"
+        val request = Request.Builder()
+            .url("${apiBase.trimEnd('/')}/repos/$repoFullName/releases?per_page=100")
+            .header("User-Agent", RepoApi.USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .apply {
+                etags[cacheKey]?.let { header("If-None-Match", it) }
+            }
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            when {
+                response.code == 304 -> return@withContext null
+                response.code == 404 -> return@withContext emptyList()
+                response.code == 403 || response.code == 429 -> throw LiveUpdateRateLimitException()
+                !response.isSuccessful -> throw IOException("HTTP ${response.code}")
+            }
+            response.header("ETag")?.let { etags[cacheKey] = it }
+
+            val body = response.body?.string() ?: return@withContext emptyList()
+            val array = runCatching { JSONArray(body) }.getOrNull() ?: return@withContext emptyList()
+            buildList {
+                for (index in 0 until array.length()) {
+                    val obj = array.optJSONObject(index) ?: continue
+                    if (obj.optBoolean("draft", false)) continue
+                    val tag = obj.optString("tag_name").takeIf { it.isNotBlank() } ?: continue
+                    add(
+                        LiveRelease(
+                            tag = tag,
+                            name = obj.optString("name").takeIf { it.isNotBlank() && it != "null" },
+                            publishedAt = obj.optString("published_at")
+                                .takeIf { it.isNotBlank() && it != "null" },
+                            url = obj.optString("html_url")
+                                .takeIf { it.isNotBlank() && it != "null" },
+                            isPrerelease = obj.optBoolean("prerelease", false),
+                            description = obj.optString("body")
+                                .takeIf { it.isNotBlank() && it != "null" },
+                            assets = parseAssets(obj),
+                        ),
+                    )
+                }
+            }
         }
     }
 
