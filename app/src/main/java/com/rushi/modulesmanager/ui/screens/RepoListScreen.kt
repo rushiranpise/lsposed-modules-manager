@@ -66,6 +66,7 @@ import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.SortMode
+import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.data.formatDate
 import com.rushi.modulesmanager.data.parseInstant
@@ -102,6 +103,7 @@ fun RepoListScreen(
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val translations by viewModel.translations.collectAsStateWithLifecycle()
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
+    val descriptionLanguages by viewModel.descriptionLanguages.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -318,6 +320,10 @@ fun RepoListScreen(
                                     ) {
                                         viewModel.cachedTranslation(module)?.let { TranslationState(text = it) }
                                     },
+                                    showTranslate = !TranslationLanguages.matches(
+                                        descriptionLanguages[module.packageName],
+                                        translateLanguage,
+                                    ),
                                     onTranslate = { viewModel.translate(module) },
                                     onShowOriginal = { viewModel.showOriginal(module) },
                                     onClick = { onOpenModule(module.packageName) },
@@ -361,38 +367,43 @@ fun RepoListScreen(
 private fun DescriptionBlock(
     summary: String,
     translation: TranslationState?,
+    showTranslate: Boolean,
     onTranslate: () -> Unit,
     onShowOriginal: () -> Unit,
 ) {
     val translated = translation?.text
-    val loading = translation?.loading == true
+    // A showing translation always keeps its undo icon, even if the text looks local.
+    val showIcon = showTranslate || translated != null
+    val loading = translation?.loading == true && showIcon
     Spacer(Modifier.height(6.dp))
     Row(verticalAlignment = Alignment.Top) {
-        Box(
-            modifier = Modifier
-                .padding(top = 1.dp)
-                .size(20.dp)
-                .clickable(enabled = !loading) {
-                    if (translated != null) onShowOriginal() else onTranslate()
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.Translate,
-                    contentDescription = if (translated != null) "Show original" else "Translate",
-                    tint = if (translated != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+        if (showIcon) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 1.dp)
+                    .size(20.dp)
+                    .clickable(enabled = !loading) {
+                        if (translated != null) onShowOriginal() else onTranslate()
                     },
-                    modifier = Modifier.size(14.dp),
-                )
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Translate,
+                        contentDescription = if (translated != null) "Show original" else "Translate",
+                        tint = if (translated != null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
+            Spacer(Modifier.width(6.dp))
         }
-        Spacer(Modifier.width(6.dp))
         Text(
             text = translated ?: summary,
             style = MaterialTheme.typography.bodySmall,
@@ -416,6 +427,7 @@ private fun ModuleCard(
     update: ModuleUpdate?,
     channel: UpdateChannel,
     translation: TranslationState?,
+    showTranslate: Boolean,
     onTranslate: () -> Unit,
     onShowOriginal: () -> Unit,
     onClick: () -> Unit,
@@ -442,6 +454,7 @@ private fun ModuleCard(
                     DescriptionBlock(
                         summary = summary,
                         translation = translation,
+                        showTranslate = showTranslate,
                         onTranslate = onTranslate,
                         onShowOriginal = onShowOriginal,
                     )

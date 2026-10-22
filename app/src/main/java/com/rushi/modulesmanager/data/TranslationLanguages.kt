@@ -21,4 +21,13 @@ object TranslationLanguages {
 
     /** Name of the configured language, or of the device language when none is set. */
     fun selectedLabel(tag: String?): String = displayName(tag ?: deviceLanguage())
+
+    /** True when the given text language is the language the user wants to read. */
+    fun matches(textLanguage: String?, target: String?): Boolean {
+        val text = textLanguage?.let { TranslateLanguage.fromLanguageTag(it) } ?: return false
+        val wanted = target?.let { TranslateLanguage.fromLanguageTag(it) }
+            ?: TranslateLanguage.fromLanguageTag(deviceLanguage())
+            ?: return false
+        return text == wanted
+    }
 }

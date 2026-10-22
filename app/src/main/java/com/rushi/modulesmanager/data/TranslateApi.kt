@@ -67,6 +67,26 @@ object TranslateApi {
         }
     }
 
+    /** Identifies each text with one client, returning null where the language is unclear. */
+    suspend fun identifyAll(texts: List<String>): List<String?> = withContext(Dispatchers.Default) {
+        val identifier = LanguageIdentification.getClient()
+        try {
+            texts.map { text ->
+                if (text.isBlank()) {
+                    null
+                } else {
+                    try {
+                        TranslateLanguage.fromLanguageTag(identifier.identifyLanguage(text).await())
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
+        } finally {
+            identifier.close()
+        }
+    }
+
     suspend fun identify(text: String): String? {
         val identifier = LanguageIdentification.getClient()
         return try {

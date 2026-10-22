@@ -116,6 +116,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _translations = MutableStateFlow<Map<String, TranslationState>>(emptyMap())
     val translations: StateFlow<Map<String, TranslationState>> = _translations.asStateFlow()
 
+    /** Detected language of each module description, so rows already in the target language
+     * can hide the translate action. */
+    private val _descriptionLanguages = MutableStateFlow<Map<String, String>>(emptyMap())
+    val descriptionLanguages: StateFlow<Map<String, String>> = _descriptionLanguages.asStateFlow()
+
     private val _detail = MutableStateFlow<RepoModule?>(null)
     val detail: StateFlow<RepoModule?> = _detail.asStateFlow()
 
@@ -180,6 +185,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }.collect { (auto, language, list) ->
                 if (auto) autoTranslateDescriptions(list, language)
             }
+        }
+        viewModelScope.launch {
+            modules
+                .map { list -> list.map { it.packageName to it.summary.orEmpty() } }
+                .distinctUntilChanged()
+                .collect { entries ->
+                    val detected = TranslateApi.identifyAll(entries.map { it.second })
+                    _descriptionLanguages.value = buildMap {
+                        entries.forEachIndexed { index, (packageName, summary) ->
+                            if (summary.isNotBlank()) {
+                                detected.getOrNull(index)?.let { put(packageName, it) }
+                            }
+                        }
+                    }
+                }
         }
     }
 
@@ -721,6 +741,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             modules.mapNotNull { module ->
                 val summary = module.summary?.trim().orEmpty()
                 if (summary.isEmpty()) return@mapNotNull null
+                if (TranslationLanguages.matches(_descriptionLanguages.value[module.packageName], target)) {
+                    return@mapNotNull null
+                }
                 if (settings.cachedTranslation(translationKey(module, target, summary)) != null) {
                     return@mapNotNull null
                 }
