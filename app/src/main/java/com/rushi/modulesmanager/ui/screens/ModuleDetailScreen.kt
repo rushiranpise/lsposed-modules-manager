@@ -126,24 +126,11 @@ fun ModuleDetailScreen(
         onDispose { viewModel.closeModule() }
     }
 
-    val topBarTitle = module?.displayName ?: packageName
-
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(topBarTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            text = packageName,
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
@@ -337,7 +324,6 @@ private fun DetailHeader(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
-                        latest != null -> StatusPill(text = "Latest ${shortVersion(latest.name)}")
                     }
                     if (isInstalled && hasUpdate) {
                         StatusPill(text = "Installed ${shortVersion(installedVersion)}".trim())
@@ -348,12 +334,20 @@ private fun DetailHeader(
 
         val latestDate = formatDate(module.latestTime(channel))
         if (latest != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Latest ${latest.name}" + (latestDate?.let { " - $it" } ?: ""),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Installed modules already show their version in the pills above.
+            val label = if (isInstalled) {
+                latestDate?.let { "Released $it" }.orEmpty()
+            } else {
+                "Latest ${latest.name}" + (latestDate?.let { " - $it" } ?: "")
+            }
+            if (label.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Spacer(Modifier.height(14.dp))
