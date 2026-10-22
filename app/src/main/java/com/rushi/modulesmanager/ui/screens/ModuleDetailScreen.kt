@@ -350,8 +350,8 @@ private fun DetailHeader(
     // Installed modules already show their version in the pills below.
     val latestLabel = when {
         latest == null -> ""
-        isInstalled -> latestDate?.let { "Released $it" }.orEmpty()
-        else -> "Latest ${latest.name}" + (latestDate?.let { " - $it" } ?: "")
+        isInstalled -> if (latestDate != null) "Released" else ""
+        else -> "Latest ${latest.name}"
     }
     Column(
         modifier = Modifier
@@ -373,11 +373,17 @@ private fun DetailHeader(
                 PackageLabel(module.packageName)
                 if (latestLabel.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = latestLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = latestLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (latestDate != null) StatusPill(text = latestDate)
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
