@@ -14,7 +14,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Open a module to read its README, its full GitHub release history and target apps.
 - The Releases tab lists every published release, stable and pre-release, with their APKs.
 - Translate module descriptions and READMEs on device, manually or automatically.
-- Install with the system installer, a PackageInstaller session, or Shizuku for silent installs.
+- Install with the system installer, a PackageInstaller session, Shizuku, or root for silent installs.
 - Long press an installed module to uninstall it.
 - The Installed tab lists every installed module, including ones missing from the index.
 - Light, dark and system themes, Material You colors, AMOLED black and GitHub-style identicons.

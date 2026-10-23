@@ -19,6 +19,11 @@ enum class InstallerType(
         "shizuku",
         "Shizuku",
         "Install silently through Shizuku, which must be running and allowed",
+    ),
+    ROOT(
+        "root",
+        "Root",
+        "Install silently through a root shell. Your root manager must allow Modules Manager.",
     );
 
     companion object {

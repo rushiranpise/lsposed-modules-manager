@@ -106,6 +106,7 @@ dependencies {
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.31.0")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.mlkit:language-id:17.0.6")
+    implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 

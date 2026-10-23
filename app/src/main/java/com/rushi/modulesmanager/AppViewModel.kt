@@ -23,6 +23,7 @@ import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.ReadmeTranslator
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
+import com.rushi.modulesmanager.data.RootInstaller
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.SortMode
 import com.rushi.modulesmanager.data.TranslateApi
@@ -605,7 +606,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         val appContext = container.appContext
         val installerType = settings.installer.value
-        if (installerType != InstallerType.SHIZUKU && !ApkInstaller.canInstall(appContext)) {
+        if (installerType != InstallerType.SHIZUKU && installerType != InstallerType.ROOT &&
+            !ApkInstaller.canInstall(appContext)
+        ) {
             message("Allow \"Install unknown apps\" for Modules Manager, then try again")
             ApkInstaller.openInstallPermissionSettings(appContext)
             return
@@ -697,6 +700,29 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 message("Allow unknown apps for Modules Manager, then try again")
                                 ApkInstaller.openInstallPermissionSettings(appContext)
                             }
+                        }
+                    }
+                    InstallerType.ROOT -> {
+                        if (!RootInstaller.isAvailable()) {
+                            message("Root access is not granted, using the session installer")
+                            if (ApkInstaller.canInstall(appContext)) {
+                                runSessionInstall(appContext, file, module)
+                            } else {
+                                container.downloads.update(null)
+                                file.delete()
+                                message("Allow unknown apps for Modules Manager, then try again")
+                                ApkInstaller.openInstallPermissionSettings(appContext)
+                            }
+                        } else {
+                            val problem = RootInstaller.install(file, appContext.packageName)
+                            container.downloads.update(null)
+                            if (problem == null) {
+                                message("${module.displayName} installed")
+                                rescan()
+                            } else {
+                                message(problem)
+                            }
+                            file.delete()
                         }
                     }
                 }

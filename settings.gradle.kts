@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // libsu, the root shell library, is published through JitPack.
+        maven(url = "https://jitpack.io")
     }
 }
 
