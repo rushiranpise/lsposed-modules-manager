@@ -1,5 +1,6 @@
 package com.rushi.modulesmanager.data
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +31,24 @@ class ReadmeTranslatorTest {
         assertFalse(prose.any { it.contains("adb install") })
         assertFalse(prose.any { it.contains("adb shell") })
         assertFalse(prose.any { it.contains("centered html") })
+    }
+
+    @Test
+    fun `raw html contributes only its text`() {
+        val prose = ReadmeTranslator.htmlProseOf(
+            """<table><tr><td align="center">支付宝</td><td>WeChat</td></tr></table>""",
+        )
+
+        assertEquals(listOf("支付宝", "WeChat"), prose)
+    }
+
+    @Test
+    fun `html code, comments and attributes are skipped`() {
+        val prose = ReadmeTranslator.htmlProseOf(
+            """<p>One</p><pre>two</pre><code>three</code><!-- four --><p title="a > b">five</p>""",
+        )
+
+        assertEquals(listOf("One", "five"), prose)
     }
 
     @Test

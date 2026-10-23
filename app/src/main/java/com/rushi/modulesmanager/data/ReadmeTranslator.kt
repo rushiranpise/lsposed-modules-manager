@@ -4,6 +4,7 @@ import com.google.mlkit.nl.translate.TranslateLanguage
 import org.commonmark.ext.gfm.tables.TableCell
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.node.Heading
+import org.commonmark.node.HtmlBlock
 import org.commonmark.node.Node
 import org.commonmark.node.Paragraph
 import org.commonmark.node.Text
@@ -11,8 +12,9 @@ import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 
 /**
- * Translates a Markdown README on-device. Only prose nodes are sent to the translator, so links,
- * images, code blocks and HTML blocks keep their exact syntax and still render correctly.
+ * Translates a Markdown README on-device. Only prose is sent to the translator, so links, images,
+ * code blocks and HTML tags keep their exact syntax. Text inside raw HTML blocks is translated
+ * separately, with the tags and attributes left alone.
  *
  * Each text node is detected on its own. A README can mix languages, so deciding from the
  * document as a whole would skip the foreign paragraphs of an otherwise English document.
@@ -46,7 +48,8 @@ object ReadmeTranslator {
 
         val document = parser.parse(markdown)
         val nodes = collectTextNodes(document).filter { it.literal.isNotBlank() }
-        if (nodes.isEmpty()) {
+        val htmlBlocks = collectHtmlBlocks(document)
+        if (nodes.isEmpty() && htmlBlocks.isEmpty()) {
             throw IllegalStateException("This README has no text that can be translated")
         }
 
@@ -58,7 +61,12 @@ object ReadmeTranslator {
             block.nodes.forEach { blockByNode[it] = blockLanguages.getOrNull(index) }
         }
 
-        val dominant = (languages + blockLanguages).filterNotNull()
+        val htmlLanguages = TranslateApi.identifyAll(htmlBlocks.map { it.text })
+        val htmlSegmentLanguages = TranslateApi.identifyAll(
+            htmlBlocks.flatMap { block -> block.segments.map { it.core.take(SAMPLE_CHARS) } },
+        )
+
+        val dominant = (languages + blockLanguages + htmlLanguages).filterNotNull()
             .groupingBy { it }
             .eachCount()
             .maxByOrNull { it.value }
@@ -69,7 +77,8 @@ object ReadmeTranslator {
         // so fall back to the language of the paragraph it belongs to. When that paragraph is
         // already in the target language but the node has a foreign script, use the document's
         // main language instead: "支付宝" inside an English sentence still needs translating.
-        val groups = nodes.mapIndexed { index, node ->
+        val groups = mutableListOf<Group>()
+        nodes.forEachIndexed { index, node ->
             val own = languages.getOrNull(index)
             val block = blockByNode[node]
             val language = own ?: when {
@@ -77,8 +86,36 @@ object ReadmeTranslator {
                 dominant != target && NON_LATIN.containsMatchIn(node.literal) -> dominant
                 else -> block
             }
-            Group(node, splitLong(node.literal), language)
+            val parts = splitLong(node.literal)
+            groups += Group(parts, language) { replacements ->
+                node.literal = parts.indices.joinToString(" ") { part ->
+                    replacements[part] ?: parts[part]
+                }
+            }
         }
+
+        var segmentIndex = 0
+        htmlBlocks.forEachIndexed { blockIndex, block ->
+            val blockLanguage = htmlLanguages.getOrNull(blockIndex)
+            block.segments.forEach { segment ->
+                val own = htmlSegmentLanguages.getOrNull(segmentIndex++)
+                val language = own ?: when {
+                    blockLanguage != null && blockLanguage != target -> blockLanguage
+                    dominant != target && NON_LATIN.containsMatchIn(segment.core) -> dominant
+                    else -> blockLanguage
+                }
+                val parts = splitLong(segment.core)
+                groups += Group(parts, language) { replacements ->
+                    val translated = parts.indices.joinToString(" ") { part ->
+                        replacements[part] ?: parts[part]
+                    }
+                    block.tokens[segment.tokenIndex].raw =
+                        segment.leading + translated + segment.trailing
+                    block.node.literal = block.tokens.joinToString("") { it.raw }
+                }
+            }
+        }
+
         val translatable = groups.filter { it.language != null && it.language != target }
         if (translatable.isEmpty()) return Result("", dominant, translated = false)
 
@@ -105,10 +142,7 @@ object ReadmeTranslator {
         }
 
         groups.forEach { group ->
-            if (group.replacements.isEmpty()) return@forEach
-            group.node.literal = group.parts.indices.joinToString(" ") { index ->
-                group.replacements[index] ?: group.parts[index]
-            }
+            if (group.replacements.isNotEmpty()) group.commit(group.replacements)
         }
 
         return Result(renderer.render(document), dominant, translated = true)
@@ -117,6 +151,10 @@ object ReadmeTranslator {
     /** Plain prose of the document, for tests and nothing else. */
     internal fun proseOf(markdown: String): List<String> =
         collectTextNodes(parser.parse(markdown)).map { it.literal }
+
+    /** Text inside a raw HTML fragment that would be translated, for tests. */
+    internal fun htmlProseOf(html: String): List<String> =
+        htmlTextSegments(tokenizeHtml(html)).map { it.core }
 
     private fun collectTextNodes(root: Node): List<Text> {
         val out = mutableListOf<Text>()
@@ -160,14 +198,138 @@ object ReadmeTranslator {
         }
     }
 
+    private fun collectHtmlBlocks(root: Node): List<HtmlBlockInfo> {
+        val blocks = mutableListOf<HtmlBlockInfo>()
+        fun walk(node: Node) {
+            var child = node.firstChild
+            while (child != null) {
+                if (child is HtmlBlock) {
+                    val tokens = tokenizeHtml(child.literal)
+                    val segments = htmlTextSegments(tokens)
+                    if (segments.isNotEmpty()) {
+                        blocks += HtmlBlockInfo(child, tokens, segments)
+                    }
+                } else {
+                    walk(child)
+                }
+                child = child.next
+            }
+        }
+        walk(root)
+        return blocks
+    }
+
+    /** Text between tags, skipping script, style, pre and code bodies. */
+    private fun htmlTextSegments(tokens: List<HtmlToken>): List<HtmlSegment> {
+        val segments = mutableListOf<HtmlSegment>()
+        var skipDepth = 0
+        tokens.forEachIndexed { index, token ->
+            if (token.isTag) {
+                skipDepth = (skipDepth + skipDelta(token.raw)).coerceAtLeast(0)
+                return@forEachIndexed
+            }
+            if (skipDepth > 0) return@forEachIndexed
+            val core = token.raw.trim()
+            if (core.isEmpty()) return@forEachIndexed
+            segments += HtmlSegment(
+                tokenIndex = index,
+                leading = token.raw.takeWhile { it.isWhitespace() },
+                core = core,
+                trailing = token.raw.takeLastWhile { it.isWhitespace() },
+            )
+        }
+        return segments
+    }
+
+    private val SKIP_TAGS = setOf("pre", "code", "script", "style")
+
+    private fun skipDelta(tag: String): Int {
+        val body = tag.removePrefix("<").trimStart()
+        if (body.startsWith("!--")) return 0
+        val closing = body.startsWith("/")
+        val name = body.removePrefix("/")
+            .substringBefore('>')
+            .substringBefore(' ')
+            .substringBefore('\t')
+            .substringBefore('\n')
+            .trimEnd('/')
+            .lowercase()
+        if (name !in SKIP_TAGS) return 0
+        if (closing) return -1
+        return if (body.trimEnd().endsWith("/>")) 0 else 1
+    }
+
+    /** Splits HTML into tags and the text between them, respecting quotes and comments. */
+    private fun tokenizeHtml(html: String): List<HtmlToken> {
+        val tokens = mutableListOf<HtmlToken>()
+        var index = 0
+        while (index < html.length) {
+            if (html[index] != '<') {
+                var end = html.indexOf('<', index)
+                if (end == -1) end = html.length
+                tokens += HtmlToken(html.substring(index, end), isTag = false)
+                index = end
+                continue
+            }
+
+            val next = html.getOrNull(index + 1)
+            if (next == null || !(next.isLetter() || next == '/' || next == '!' || next == '?')) {
+                tokens += HtmlToken("<", isTag = false)
+                index++
+                continue
+            }
+
+            val comment = html.startsWith("<!--", index)
+            var cursor = index + 1
+            var quote: Char? = null
+            while (cursor < html.length) {
+                val char = html[cursor]
+                if (comment) {
+                    if (html.startsWith("-->", cursor)) {
+                        cursor += 2
+                        break
+                    }
+                } else if (quote != null) {
+                    if (char == quote) quote = null
+                } else if (char == '"' || char == '\'') {
+                    quote = char
+                } else if (char == '>') {
+                    break
+                }
+                cursor++
+            }
+            val end = minOf(cursor + 1, html.length)
+            tokens += HtmlToken(html.substring(index, end), isTag = true)
+            index = end
+        }
+        return tokens
+    }
+
     private class Block(val nodes: List<Text>) {
         val text: String = nodes.joinToString(" ") { it.literal }.take(SAMPLE_CHARS)
     }
 
+    private class HtmlBlockInfo(
+        val node: HtmlBlock,
+        val tokens: List<HtmlToken>,
+        val segments: List<HtmlSegment>,
+    ) {
+        val text: String = segments.joinToString(" ") { it.core }.take(SAMPLE_CHARS)
+    }
+
+    private class HtmlToken(var raw: String, val isTag: Boolean)
+
+    private class HtmlSegment(
+        val tokenIndex: Int,
+        val leading: String,
+        val core: String,
+        val trailing: String,
+    )
+
     private class Group(
-        val node: Text,
         val parts: List<String>,
         val language: String?,
+        val commit: (Map<Int, String>) -> Unit,
     ) {
         val replacements = HashMap<Int, String>()
     }
