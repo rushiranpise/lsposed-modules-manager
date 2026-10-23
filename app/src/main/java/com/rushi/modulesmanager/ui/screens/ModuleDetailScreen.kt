@@ -256,6 +256,7 @@ fun ModuleDetailScreen(
                     }
                 },
                 onOpenModule = { viewModel.openInstalledModule(packageName) },
+                onOpenAppInfo = { viewModel.openAppInfo(packageName) },
             )
 
             PrimaryTabRow(selectedTabIndex = tab) {
@@ -341,6 +342,7 @@ private fun DetailHeader(
     primaryAsset: RepoAsset?,
     onInstall: () -> Unit,
     onOpenModule: () -> Unit,
+    onOpenAppInfo: () -> Unit,
 ) {
     val updateVersion = update?.version
     val hasUpdate = updateVersion != null
@@ -409,12 +411,12 @@ private fun DetailHeader(
         val primaryLabel = when {
             hasUpdate -> "Update"
             isInstalled && installedHasLauncher -> "Open"
-            isInstalled -> "Installed"
+            isInstalled -> "App info"
             else -> "Install"
         }
         val primaryEnabled = when {
             hasUpdate -> primaryAsset != null
-            isInstalled -> installedHasLauncher
+            isInstalled -> true
             else -> primaryAsset != null
         }
         Button(
@@ -422,17 +424,18 @@ private fun DetailHeader(
                 when {
                     hasUpdate || !isInstalled -> onInstall()
                     installedHasLauncher -> onOpenModule()
-                    else -> Unit
+                    else -> onOpenAppInfo()
                 }
             },
             enabled = primaryEnabled,
+            shape = RoundedCornerShape(28.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(
-                imageVector = if (isInstalled && !hasUpdate) {
-                    Icons.Outlined.PlayArrow
-                } else {
-                    Icons.Outlined.Download
+                imageVector = when {
+                    !isInstalled || hasUpdate -> Icons.Outlined.Download
+                    installedHasLauncher -> Icons.Outlined.PlayArrow
+                    else -> Icons.Outlined.Info
                 },
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),

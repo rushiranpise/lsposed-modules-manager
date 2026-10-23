@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -858,6 +859,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (!container.scanner.openModule(packageName)) {
             message("This module has no settings screen")
         }
+    }
+
+    /** Hook-only modules have no screen to open, so show their system app info instead. */
+    fun openAppInfo(packageName: String) {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName"),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { container.appContext.startActivity(intent) }
+            .onFailure { message("Could not open app info") }
     }
 
     /** Opens the system uninstaller for an installed module. */
