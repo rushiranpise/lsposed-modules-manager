@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -43,7 +44,17 @@ object ApkInstaller {
         try {
             val installer = appContext.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-                .apply { setSize(apk.length()) }
+                .apply {
+                    setSize(apk.length())
+                    // Android 12+ skips the confirmation for updates to apps this installer
+                    // installed. Fresh installs still go through STATUS_PENDING_USER_ACTION.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        setRequestUpdateOwnership(true)
+                    }
+                }
             val sessionId = installer.createSession(params)
 
             installer.openSession(sessionId).use { session ->
