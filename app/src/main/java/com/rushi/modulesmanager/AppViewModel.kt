@@ -36,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -138,6 +139,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var detailJob: Job? = null
     private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
+    private var installTimeoutJob: Job? = null
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
     private var liveCheckJob: Job? = null
@@ -878,8 +880,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }.onFailure { message("No app can open this link") }
     }
 
-    private fun runSessionInstall(appContext: Context, file: File, module: RepoModule) {
+    private suspend fun runSessionInstall(appContext: Context, file: File, module: RepoModule) {
+        installTimeoutJob?.cancel()
+        installTimeoutJob = viewModelScope.launch {
+            delay(INSTALL_TIMEOUT_MS)
+            if (container.downloads.state.value != null) {
+                ApkInstaller.abandonPendingSession(appContext)
+                container.downloads.update(null)
+                file.delete()
+                message("The install timed out")
+            }
+        }
         ApkInstaller.installSession(appContext, file) { status, reason ->
+            installTimeoutJob?.cancel()
             if (status == PackageInstaller.STATUS_SUCCESS) {
                 message("${module.displayName} installed")
                 rescan()
@@ -919,6 +932,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     companion object {
         private const val LIVE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L
+        private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer { AppViewModel(container) }
         }
