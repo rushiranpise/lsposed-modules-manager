@@ -25,7 +25,7 @@ enum class SortMode(val key: String, val label: String) {
     UPDATED("updated", "Last updated");
 
     companion object {
-        fun fromKey(key: String?): SortMode = entries.firstOrNull { it.key == key } ?: NAME
+        fun fromKey(key: String?): SortMode = entries.firstOrNull { it.key == key } ?: UPDATED
     }
 }
 

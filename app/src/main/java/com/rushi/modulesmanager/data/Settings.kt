@@ -27,7 +27,7 @@ class Settings(context: Context) {
     private val _systemColors = MutableStateFlow(prefs.getBoolean(KEY_SYSTEM_COLORS, true))
     val systemColors: StateFlow<Boolean> = _systemColors.asStateFlow()
 
-    private val _updatesFirst = MutableStateFlow(prefs.getBoolean(KEY_UPDATES_FIRST, true))
+    private val _updatesFirst = MutableStateFlow(prefs.getBoolean(KEY_UPDATES_FIRST, false))
     val updatesFirst: StateFlow<Boolean> = _updatesFirst.asStateFlow()
 
     private val _autoTranslate = MutableStateFlow(prefs.getBoolean(KEY_AUTO_TRANSLATE, false))
