@@ -110,6 +110,7 @@ private data class LibraryState(
     val skipped: Map<String, String> = emptyMap(),
     val ignored: Set<String> = emptySet(),
     val preRelease: Set<String> = emptySet(),
+    val links: Map<String, String> = emptyMap(),
 )
 
 data class ReadmeTranslationState(
@@ -134,13 +135,20 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val skippedVersions: StateFlow<Map<String, String>> = container.moduleState.skipped
     val ignoredUpdates: StateFlow<Set<String>> = container.moduleState.ignored
     val preReleaseModules: StateFlow<Set<String>> = container.moduleState.preRelease
+    val moduleLinks: StateFlow<Map<String, String>> = container.moduleState.links
 
     private val libraryState = combine(
         skippedVersions,
         ignoredUpdates,
         preReleaseModules,
-    ) { skipped, ignored, preRelease ->
-        LibraryState(skipped = skipped, ignored = ignored, preRelease = preRelease)
+        moduleLinks,
+    ) { skipped, ignored, preRelease, links ->
+        LibraryState(
+            skipped = skipped,
+            ignored = ignored,
+            preRelease = preRelease,
+            links = links,
+        )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryState())
 
     val autoTranslate: StateFlow<Boolean> = settings.autoTranslate
@@ -216,7 +224,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     ) { repoModules, installedModules, selectedChannel, library ->
         val byPackage = repoModules.associateBy { it.packageName }
         installedModules.mapNotNull { installedModule ->
-            val module = byPackage[installedModule.packageName] ?: return@mapNotNull null
+            val module = byPackage[installedModule.packageName]
+                ?: library.links[installedModule.packageName]?.let { byPackage[it] }
+                ?: return@mapNotNull null
             if (installedModule.packageName in library.ignored || module.packageName in library.ignored) {
                 return@mapNotNull null
             }
@@ -705,6 +715,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun togglePreReleases(module: RepoModule) {
         val enabled = container.moduleState.togglePreRelease(module.packageName)
         message(if (enabled) "Following pre-releases for ${module.displayName}" else "Following stable releases")
+    }
+
+    /** Links a differently named installed package to a repository module. */
+    fun linkModule(installedPackage: String, repoModule: RepoModule) {
+        container.moduleState.linkModule(installedPackage, repoModule.packageName)
+        message("Linked to ${repoModule.displayName}")
+    }
+
+    fun unlinkModule(installedPackage: String) {
+        container.moduleState.unlinkModule(installedPackage)
+        message("Repository link removed")
     }
 
     private fun includePreReleases(module: RepoModule): Boolean =

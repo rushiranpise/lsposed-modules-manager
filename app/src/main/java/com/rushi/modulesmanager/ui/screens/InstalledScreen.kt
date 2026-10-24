@@ -2,6 +2,7 @@ package com.rushi.modulesmanager.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,12 +14,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,6 +39,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,7 +79,7 @@ import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import kotlinx.coroutines.launch
 
-private enum class InstalledFilter { ALL, UPDATES, NOT_IN_REPO }
+private enum class InstalledFilter { ALL, UPDATES, UP_TO_DATE, NOT_IN_REPO }
 
 @Composable
 fun InstalledScreen(
@@ -88,24 +93,49 @@ fun InstalledScreen(
     val ignoredUpdates by viewModel.ignoredUpdates.collectAsStateWithLifecycle()
     val preReleaseModules by viewModel.preReleaseModules.collectAsStateWithLifecycle()
     val skippedVersions by viewModel.skippedVersions.collectAsStateWithLifecycle()
+    val moduleLinks by viewModel.moduleLinks.collectAsStateWithLifecycle()
 
     var filter by rememberSaveable { mutableStateOf(InstalledFilter.ALL) }
+    var query by rememberSaveable { mutableStateOf("") }
     var pendingUninstall by remember { mutableStateOf<InstalledModule?>(null) }
+    var linkingModule by remember { mutableStateOf<InstalledModule?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     val modulesByPackage = remember(modules) { modules.associateBy { it.packageName } }
     val updatesByPackage = remember(updates) { updates.associateBy { it.installed.packageName } }
-    val notInRepoCount = remember(installed, modulesByPackage) {
-        installed.count { it.packageName !in modulesByPackage }
+    fun repoModuleFor(module: InstalledModule): RepoModule? =
+        modulesByPackage[module.packageName]
+            ?: moduleLinks[module.packageName]?.let { modulesByPackage[it] }
+
+    val notInRepoCount = remember(installed, modulesByPackage, moduleLinks) {
+        installed.count { repoModuleFor(it) == null }
     }
-    val visible = remember(installed, updatesByPackage, modulesByPackage, filter) {
+    val upToDateCount = remember(installed, updatesByPackage, modulesByPackage, moduleLinks) {
+        installed.count { repoModuleFor(it) != null && !updatesByPackage.containsKey(it.packageName) }
+    }
+    val visible = remember(
+        installed,
+        updatesByPackage,
+        modulesByPackage,
+        moduleLinks,
+        filter,
+        query,
+    ) {
+        val needle = query.trim().lowercase()
         installed.filter { module ->
-            when (filter) {
+            val inRepo = repoModuleFor(module) != null
+            val matchesFilter = when (filter) {
                 InstalledFilter.ALL -> true
                 InstalledFilter.UPDATES -> updatesByPackage.containsKey(module.packageName)
-                InstalledFilter.NOT_IN_REPO -> module.packageName !in modulesByPackage
+                InstalledFilter.UP_TO_DATE ->
+                    inRepo && !updatesByPackage.containsKey(module.packageName)
+                InstalledFilter.NOT_IN_REPO -> !inRepo
             }
+            val matchesQuery = needle.isEmpty() ||
+                module.label.lowercase().contains(needle) ||
+                module.packageName.lowercase().contains(needle)
+            matchesFilter && matchesQuery
         }.sortedWith(
             compareBy<InstalledModule> { if (updatesByPackage.containsKey(it.packageName)) 0 else 1 }
                 .thenBy { it.label.lowercase() },
@@ -136,11 +166,24 @@ fun InstalledScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                placeholder = { Text("Search installed") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CountedFilterChip(
@@ -154,6 +197,12 @@ fun InstalledScreen(
                     onClick = { filter = InstalledFilter.UPDATES },
                     label = "Updates",
                     count = updates.size,
+                )
+                CountedFilterChip(
+                    selected = filter == InstalledFilter.UP_TO_DATE,
+                    onClick = { filter = InstalledFilter.UP_TO_DATE },
+                    label = "Up to date",
+                    count = upToDateCount,
                 )
                 CountedFilterChip(
                     selected = filter == InstalledFilter.NOT_IN_REPO,
@@ -202,6 +251,7 @@ fun InstalledScreen(
                                 } else {
                                     when (filter) {
                                         InstalledFilter.UPDATES -> "Nothing to update"
+                                        InstalledFilter.UP_TO_DATE -> "Nothing is up to date"
                                         InstalledFilter.NOT_IN_REPO -> "All modules are in the repository"
                                         InstalledFilter.ALL -> "No installed modules found"
                                     }
@@ -212,6 +262,8 @@ fun InstalledScreen(
                                     when (filter) {
                                         InstalledFilter.UPDATES ->
                                             "All installed modules are on their latest version."
+                                        InstalledFilter.UP_TO_DATE ->
+                                            "No installed module matches the current search."
                                         InstalledFilter.NOT_IN_REPO ->
                                             "Every installed module has an entry in the daily index."
                                         InstalledFilter.ALL ->
@@ -222,7 +274,8 @@ fun InstalledScreen(
                         }
                     } else {
                         items(visible, key = { it.packageName }) { module ->
-                            val repoModule = modulesByPackage[module.packageName]
+                            val repoModule = repoModuleFor(module)
+                            val linked = moduleLinks[module.packageName] != null
                             InstalledCard(
                                 module = module,
                                 repoModule = repoModule,
@@ -244,6 +297,9 @@ fun InstalledScreen(
                                 onToggleIgnore = { repoModule?.let(viewModel::toggleIgnoreUpdates) },
                                 onTogglePreRelease = { repoModule?.let(viewModel::togglePreReleases) },
                                 onAppInfo = { viewModel.openAppInfo(module.packageName) },
+                                onLinkModule = { linkingModule = module },
+                                onUnlinkModule = { viewModel.unlinkModule(module.packageName) },
+                                linked = linked,
                                 onUninstall = { pendingUninstall = module },
                             )
                         }
@@ -297,6 +353,75 @@ fun InstalledScreen(
             },
         )
     }
+
+    linkingModule?.let { module ->
+        LinkModuleDialog(
+            modules = modules,
+            onDismiss = { linkingModule = null },
+            onSelect = { repo ->
+                viewModel.linkModule(module.packageName, repo)
+                linkingModule = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun LinkModuleDialog(
+    modules: List<RepoModule>,
+    onDismiss: () -> Unit,
+    onSelect: (RepoModule) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(modules, query) {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) modules.take(100) else modules.filter {
+            it.displayName.lowercase().contains(needle) ||
+                it.packageName.lowercase().contains(needle)
+        }.take(100)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Link repository module") },
+        text = {
+            Column {
+                Text(
+                    text = "Choose the repository entry for this installed package. Updates and releases will use it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search modules") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    items(filtered, key = { it.packageName }) { repo ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(onClick = { onSelect(repo) }, onLongClick = {})
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Text(repo.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                text = repo.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -317,6 +442,9 @@ private fun InstalledCard(
     onToggleIgnore: () -> Unit,
     onTogglePreRelease: () -> Unit,
     onAppInfo: () -> Unit,
+    onLinkModule: () -> Unit,
+    onUnlinkModule: () -> Unit,
+    linked: Boolean,
     onUninstall: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -409,6 +537,23 @@ private fun InstalledCard(
                                     onClick = {
                                         menuOpen = false
                                         onToggleIgnore()
+                                    },
+                                )
+                            }
+                            if (repoModule == null) {
+                                DropdownMenuItem(
+                                    text = { Text("Link to repository module") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onLinkModule()
+                                    },
+                                )
+                            } else if (linked) {
+                                DropdownMenuItem(
+                                    text = { Text("Unlink repository module") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onUnlinkModule()
                                     },
                                 )
                             }

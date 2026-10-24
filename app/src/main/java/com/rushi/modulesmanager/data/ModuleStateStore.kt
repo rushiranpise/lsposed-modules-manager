@@ -23,6 +23,10 @@ class ModuleStateStore(context: Context) {
     private val _preRelease = MutableStateFlow(readSet(KEY_PRE_RELEASE))
     val preRelease: StateFlow<Set<String>> = _preRelease.asStateFlow()
 
+    /** Installed package name to repository package name, for renamed or forked modules. */
+    private val _links = MutableStateFlow(readMap(KEY_LINKS))
+    val links: StateFlow<Map<String, String>> = _links.asStateFlow()
+
     fun skipVersion(packageName: String, raw: String) {
         val updated = _skipped.value + (packageName to raw)
         _skipped.value = updated
@@ -49,6 +53,18 @@ class ModuleStateStore(context: Context) {
         _preRelease.value = updated
         writeSet(KEY_PRE_RELEASE, updated)
         return packageName in updated
+    }
+
+    fun linkModule(installedPackage: String, repoPackage: String) {
+        val updated = _links.value + (installedPackage to repoPackage)
+        _links.value = updated
+        writeMap(KEY_LINKS, updated)
+    }
+
+    fun unlinkModule(installedPackage: String) {
+        val updated = _links.value - installedPackage
+        _links.value = updated
+        writeMap(KEY_LINKS, updated)
     }
 
     private fun readMap(key: String): Map<String, String> =
@@ -82,5 +98,6 @@ class ModuleStateStore(context: Context) {
         const val KEY_SKIPPED = "skipped_versions"
         const val KEY_IGNORED = "ignored_updates"
         const val KEY_PRE_RELEASE = "pre_release_modules"
+        const val KEY_LINKS = "module_links"
     }
 }
