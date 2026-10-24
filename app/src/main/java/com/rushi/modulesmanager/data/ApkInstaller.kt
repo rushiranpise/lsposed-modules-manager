@@ -15,6 +15,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 object ApkInstaller {
+    const val EXTRA_PACKAGE_NAME = "package_name"
+
     private const val SESSION_PREFS = "install_session"
     private const val KEY_SESSION_ID = "session_id"
 
@@ -46,6 +48,7 @@ object ApkInstaller {
     suspend fun installSession(
         context: Context,
         apk: File,
+        packageName: String,
         onResult: (status: Int, message: String?) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
@@ -77,6 +80,7 @@ object ApkInstaller {
                 }
 
                 val resultIntent = Intent(appContext, InstallResultReceiver::class.java)
+                    .putExtra(EXTRA_PACKAGE_NAME, packageName)
                 val pendingIntent = android.app.PendingIntent.getBroadcast(
                     appContext,
                     sessionId,

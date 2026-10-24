@@ -6,6 +6,7 @@ import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModuleScanner
 import com.rushi.modulesmanager.data.LiveReleaseApi
 import com.rushi.modulesmanager.data.ModuleStateStore
+import com.rushi.modulesmanager.data.PendingInstalls
 import com.rushi.modulesmanager.data.ReadmeApi
 import com.rushi.modulesmanager.data.RepoApi
 import com.rushi.modulesmanager.data.RepoRepository
@@ -15,6 +16,7 @@ class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
     val settings = Settings(appContext)
     val moduleState = ModuleStateStore(appContext)
+    val pendingInstalls = PendingInstalls.get(appContext)
     val api = RepoApi(RepoApi.createClient())
     val liveApi = LiveReleaseApi(RepoApi.createClient())
     val readmeApi = ReadmeApi(RepoApi.createClient())

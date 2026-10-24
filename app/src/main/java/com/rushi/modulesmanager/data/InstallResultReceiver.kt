@@ -14,6 +14,7 @@ class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val packageName = intent.getStringExtra(ApkInstaller.EXTRA_PACKAGE_NAME)
 
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             val confirmation = IntentCompat.getParcelableExtra(
@@ -38,5 +39,10 @@ class InstallResultReceiver : BroadcastReceiver() {
         }
 
         ApkInstaller.deliverResult(context, status, message)
+        // A failed session is done; a successful one stays pending long enough for the next
+        // launch to notice it if this process was gone when the package landed.
+        if (status != PackageInstaller.STATUS_SUCCESS && !packageName.isNullOrBlank()) {
+            PendingInstalls.get(context).remove(packageName)
+        }
     }
 }

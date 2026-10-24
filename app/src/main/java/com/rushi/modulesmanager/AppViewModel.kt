@@ -1,11 +1,14 @@
 package com.rushi.modulesmanager
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -23,6 +26,7 @@ import com.rushi.modulesmanager.data.InstallerType
 import com.rushi.modulesmanager.data.LiveReleaseApi
 import com.rushi.modulesmanager.data.LiveUpdateRateLimitException
 import com.rushi.modulesmanager.data.ModuleVersion
+import com.rushi.modulesmanager.data.PendingInstall
 import com.rushi.modulesmanager.data.ReadmeTranslator
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
@@ -102,7 +106,11 @@ private sealed interface InstallResult {
     data class Failure(val message: String) : InstallResult
 }
 
-private data class PreparedInstall(val update: ModuleUpdate, val file: File)
+private data class PreparedInstall(
+    val update: ModuleUpdate,
+    val file: File,
+    val asset: RepoAsset,
+)
 
 data class TranslationState(val text: String? = null, val loading: Boolean = false)
 
@@ -221,6 +229,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var detectedModules: List<InstalledModule> = emptyList()
     private var installedVersionMap: Map<String, InstalledPackageVersion> = emptyMap()
 
+    /** The system installer can finish while this process is gone. */
+    private val packageChangeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val packageName = intent?.data?.schemeSpecificPart ?: return
+            if (container.pendingInstalls.isPending(packageName)) rescan()
+        }
+    }
+
     val updates: StateFlow<List<ModuleUpdate>> = combine(
         modules,
         repoInstalled,
@@ -259,6 +275,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         runCatching {
             Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceived)
             Shizuku.addBinderDeadListener(shizukuBinderDead)
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                container.appContext,
+                packageChangeReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_PACKAGE_ADDED)
+                    addAction(Intent.ACTION_PACKAGE_REPLACED)
+                    addDataScheme("package")
+                },
+                ContextCompat.RECEIVER_EXPORTED,
+            )
         }
         rescan()
         viewModelScope.launch {
@@ -321,6 +349,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             detectedModules = scanned.modules
             installedVersionMap = scanned.versions
             _installedVersions.value = scanned.versions
+            reconcilePendingInstalls()
             rebuildRepoInstalled()
             if (showMessage) message("Rescanned installed modules")
         }
@@ -881,16 +910,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     container.downloads.progress(done, total)
                 }
                 container.downloads.phase(DownloadCenter.Phase.INSTALLING)
+                markPending(module, asset)
                 val result = installDownloaded(appContext, file, module, announce = true)
                 container.downloads.update(null)
                 when (result) {
                     InstallResult.Success -> {
+                        container.pendingInstalls.remove(module.packageName)
                         message("${module.displayName} installed")
                         rescan()
                         file.delete()
                     }
                     InstallResult.Delegated -> message("Opening the system installer")
                     is InstallResult.Failure -> {
+                        container.pendingInstalls.remove(module.packageName)
                         message(result.message)
                         file.delete()
                     }
@@ -902,10 +934,67 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 container.downloads.update(null)
+                container.pendingInstalls.remove(module.packageName)
                 destination.delete()
                 File(destination.path + ".part").delete()
                 message(e.userMessage())
             }
+        }
+    }
+
+    /** Remembers the version the external installer is expected to land. */
+    private fun markPending(module: RepoModule, asset: RepoAsset, version: ModuleVersion? = null) {
+        val expected = version ?: module.allReleases()
+            .firstOrNull { release -> release.assets.any { it.downloadUrl == asset.downloadUrl } }
+            ?.let { ModuleVersion.parse(it.tagName ?: it.name) }
+        container.pendingInstalls.put(
+            PendingInstall(
+                packageName = module.packageName,
+                label = module.displayName,
+                versionCode = expected?.code ?: 0L,
+                versionName = expected?.name,
+                startedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    /** Clears the installs that actually landed while the app was away. */
+    private fun reconcilePendingInstalls() {
+        val pending = container.pendingInstalls.all()
+        if (pending.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val completed = mutableListOf<PendingInstall>()
+        for (item in pending) {
+            val installed = installedVersionMap[item.packageName]
+            val landed = installed != null && (
+                installed.lastUpdateTime >= item.startedAt ||
+                    when {
+                        item.versionCode > 0L && installed.versionCode > 0L ->
+                            installed.versionCode >= item.versionCode
+                        item.versionName != null -> {
+                            val expected = ModuleVersion(item.versionCode, item.versionName)
+                            !expected.isNewerThan(installed.versionCode, installed.versionName)
+                        }
+                        else -> false
+                    }
+                )
+            when {
+                landed -> {
+                    container.pendingInstalls.remove(item.packageName)
+                    completed += item
+                }
+                now - item.startedAt > PENDING_INSTALL_TIMEOUT_MS ->
+                    container.pendingInstalls.remove(item.packageName)
+            }
+        }
+        if (completed.isNotEmpty()) {
+            message(
+                if (completed.size == 1) {
+                    "${completed.first().label} installed"
+                } else {
+                    "${completed.size} modules installed"
+                },
+            )
         }
     }
 
@@ -961,7 +1050,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             } else {
                 InstallResult.Failure("Could not open a system installer")
             }
-            InstallerType.SESSION -> installSession(context, file)
+            InstallerType.SESSION -> installSession(context, file, module.packageName)
             InstallerType.SHIZUKU -> {
                 if (ShizukuInstaller.ensurePermission()) {
                     val problem = ShizukuInstaller.install(file)
@@ -974,7 +1063,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         "Shizuku permission was not granted"
                     }
                     if (announce) message("$reason, using the session installer")
-                    sessionFallback(context, file)
+                    sessionFallback(context, file, module.packageName)
                 }
             }
             InstallerType.ROOT -> {
@@ -983,25 +1072,33 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
                 } else {
                     if (announce) message("Root access is not granted, using the session installer")
-                    sessionFallback(context, file)
+                    sessionFallback(context, file, module.packageName)
                 }
             }
         }
     }
 
-    private suspend fun sessionFallback(context: Context, file: File): InstallResult =
+    private suspend fun sessionFallback(
+        context: Context,
+        file: File,
+        packageName: String,
+    ): InstallResult =
         if (ApkInstaller.canInstall(context)) {
-            installSession(context, file)
+            installSession(context, file, packageName)
         } else {
             ApkInstaller.openInstallPermissionSettings(context)
             InstallResult.Failure("Allow unknown apps for Modules Manager, then try again")
         }
 
-    private suspend fun installSession(context: Context, file: File): InstallResult {
+    private suspend fun installSession(
+        context: Context,
+        file: File,
+        packageName: String,
+    ): InstallResult {
         val result = withTimeoutOrNull(INSTALL_TIMEOUT_MS) {
             val outcome = CompletableDeferred<Pair<Int, String?>>()
             launch {
-                ApkInstaller.installSession(context, file) { status, reason ->
+                ApkInstaller.installSession(context, file, packageName) { status, reason ->
                     outcome.complete(status to reason)
                 }
             }
@@ -1088,7 +1185,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                             downloaded = it.total,
                                         )
                                     }
-                                    queue.send(PreparedInstall(update, file))
+                                    queue.send(PreparedInstall(update, file, asset))
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
@@ -1110,6 +1207,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 it?.copy(current = update.module.displayName)
                             }
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.INSTALLING) }
+                            markPending(update.module, prepared.asset, update.version)
                             val result = try {
                                 installDownloaded(appContext, prepared.file, update.module, announce = false)
                             } catch (e: CancellationException) {
@@ -1120,6 +1218,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                             }
                             when (result) {
                                 InstallResult.Success -> {
+                                    container.pendingInstalls.remove(packageName)
                                     updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
                                     prepared.file.delete()
                                 }
@@ -1127,6 +1226,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
                                 }
                                 is InstallResult.Failure -> {
+                                    container.pendingInstalls.remove(packageName)
                                     failures += "${update.module.displayName}: ${result.message}"
                                     updateBatchItem(packageName) {
                                         it.copy(phase = BatchPhase.FAILED, error = result.message)
@@ -1362,12 +1462,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             Shizuku.removeBinderReceivedListener(shizukuBinderReceived)
             Shizuku.removeBinderDeadListener(shizukuBinderDead)
         }
+        runCatching { container.appContext.unregisterReceiver(packageChangeReceiver) }
         super.onCleared()
     }
 
     companion object {
         private const val LIVE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
+        private const val PENDING_INSTALL_TIMEOUT_MS = 30 * 60 * 1000L
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer { AppViewModel(container) }
         }
