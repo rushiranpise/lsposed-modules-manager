@@ -541,10 +541,15 @@ private fun InstalledCard(
                             if (canTrackPreReleases) {
                                 DropdownMenuItem(
                                     text = { Text("Follow pre-releases") },
-                                    leadingIcon = {
-                                        if (preReleases) {
-                                            Icon(Icons.Outlined.Check, contentDescription = null)
+                                    leadingIcon = if (preReleases) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Check,
+                                                contentDescription = null,
+                                            )
                                         }
+                                    } else {
+                                        null
                                     },
                                     onClick = {
                                         menuOpen = false
