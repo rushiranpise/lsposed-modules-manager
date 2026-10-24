@@ -200,6 +200,7 @@ data class RepoModule(
     fun withSourceOverride(repoFullName: String): RepoModule {
         val owner = repoFullName.substringBefore('/')
         return copy(
+            displayName = prettifyRepoName(repoFullName.substringAfter('/')),
             sourceUrl = "https://github.com/$repoFullName",
             repoFullName = repoFullName,
             url = "https://github.com/$repoFullName/releases",
@@ -209,8 +210,9 @@ data class RepoModule(
         )
     }
 
-    /** Puts the index source back while keeping releases and versions already merged. */
+    /** Puts the index source and name back while keeping releases already merged. */
     fun withOriginalSource(original: RepoModule): RepoModule = copy(
+        displayName = original.displayName,
         sourceUrl = original.sourceUrl,
         repoFullName = original.repoFullName,
         url = original.url,
@@ -268,6 +270,20 @@ data class ModuleVersion(val code: Long, val name: String) {
         }
     }
 }
+
+/** Turns a repository slug such as "samsung-feature-extension" into a readable name. */
+internal fun prettifyRepoName(value: String): String = value
+    .replace('-', ' ')
+    .replace('_', ' ')
+    .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+    .split(' ')
+    .joinToString(" ") { word ->
+        word.replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        }
+    }
 
 private fun versionSegments(value: String?): List<String> {
     if (value.isNullOrBlank()) return emptyList()

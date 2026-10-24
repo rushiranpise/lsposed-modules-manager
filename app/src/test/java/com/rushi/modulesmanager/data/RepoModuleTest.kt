@@ -6,6 +6,13 @@ import org.junit.Test
 class RepoModuleTest {
 
     @Test
+    fun `repository slugs become readable module names`() {
+        assertEquals("Samsung Feature Extension", prettifyRepoName("samsung-feature-extension"))
+        assertEquals("LSPilot", prettifyRepoName("LSPilot"))
+        assertEquals("My Module", prettifyRepoName("my_module"))
+    }
+
+    @Test
     fun `the release list combines history with the index releases, newest first`() {
         val module = RepoModule(
             packageName = "com.example.module",
