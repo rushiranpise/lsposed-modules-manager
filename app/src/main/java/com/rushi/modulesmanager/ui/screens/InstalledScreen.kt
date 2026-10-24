@@ -223,8 +223,13 @@ fun InstalledScreen(
                 )
             }
 
-            if (batch?.running == true) {
-                BatchProgressCard(state = batch!!, onCancel = viewModel::cancelBatch)
+            val visibleBatch = batch
+            if (visibleBatch != null && (visibleBatch.running || visibleBatch.interrupted)) {
+                BatchProgressCard(
+                    state = visibleBatch,
+                    onCancel = viewModel::cancelBatch,
+                    onDismiss = viewModel::dismissBatch,
+                )
             } else if (updates.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = viewModel::updateAll,
@@ -620,8 +625,14 @@ private fun InstalledCard(
 }
 
 @Composable
-private fun BatchProgressCard(state: BatchUpdateState, onCancel: () -> Unit) {
+private fun BatchProgressCard(
+    state: BatchUpdateState,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val fraction = if (state.total > 0) state.finished.toFloat() / state.total else 0f
+    val failedItems = state.items.values.filter { it.phase == BatchPhase.FAILED }
+    val firstFailure = failedItems.firstOrNull()
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -633,18 +644,38 @@ private fun BatchProgressCard(state: BatchUpdateState, onCancel: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = state.current?.let { "Installing $it" } ?: "Preparing updates",
+                        text = if (state.running) {
+                            state.current?.let { "Installing $it" } ?: "Preparing updates"
+                        } else {
+                            "Updates interrupted"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${state.finished} of ${state.total} done",
+                        text = buildString {
+                            append("${state.finished} of ${state.total} done")
+                            if (failedItems.isNotEmpty()) append(" - ${failedItems.size} failed")
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (!state.running && firstFailure != null) {
+                        Text(
+                            text = "${firstFailure.title}: ${firstFailure.error.orEmpty()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                TextButton(onClick = onCancel) { Text("Cancel") }
+                if (state.running) {
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                } else {
+                    TextButton(onClick = onDismiss) { Text("Dismiss") }
+                }
             }
             Spacer(Modifier.height(6.dp))
             LinearProgressIndicator(

@@ -102,6 +102,8 @@ data class BatchUpdateState(
     val total: Int,
     val current: String? = null,
     val items: Map<String, BatchItemState> = emptyMap(),
+    /** True when a run was restored after the process stopped before it could finish. */
+    val interrupted: Boolean = false,
 ) {
     val finished: Int
         get() = items.values.count {
@@ -232,6 +234,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
     private var batchJob: Job? = null
+    private var batchPersisting = false
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
     private var liveCheckJob: Job? = null
@@ -299,6 +302,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 },
                 ContextCompat.RECEIVER_EXPORTED,
             )
+        }
+        restoreBatch()
+        viewModelScope.launch {
+            _batchUpdate.collect { state ->
+                if (batchPersisting && state?.running == true) container.batchState.save(state)
+            }
         }
         rescan()
         viewModelScope.launch {
@@ -996,6 +1005,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (pending.isEmpty()) return
         val now = System.currentTimeMillis()
         val completed = mutableListOf<PendingInstall>()
+        val expired = mutableListOf<PendingInstall>()
         for (item in pending) {
             val installed = installedVersionMap[item.packageName]
             val landed = item.landed(installed)
@@ -1004,8 +1014,30 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     container.pendingInstalls.remove(item.packageName)
                     completed += item
                 }
-                now - item.startedAt > PENDING_INSTALL_TIMEOUT_MS ->
+                now - item.startedAt > PENDING_INSTALL_TIMEOUT_MS -> {
                     container.pendingInstalls.remove(item.packageName)
+                    expired += item
+                }
+            }
+        }
+        if (completed.isNotEmpty() || expired.isNotEmpty()) {
+            val done = completed.map { it.packageName }.toSet()
+            val failed = expired.map { it.packageName }.toSet()
+            _batchUpdate.update { state ->
+                state?.copy(
+                    items = state.items.mapValues { (packageName, item) ->
+                        when {
+                            packageName in done && item.phase != BatchPhase.COMPLETED ->
+                                item.copy(phase = BatchPhase.COMPLETED, error = null)
+                            packageName in failed && item.phase == BatchPhase.INSTALLING ->
+                                item.copy(
+                                    phase = BatchPhase.FAILED,
+                                    error = "The installer did not confirm the install",
+                                )
+                            else -> item
+                        }
+                    },
+                )
             }
         }
         if (completed.isNotEmpty()) {
@@ -1137,6 +1169,39 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Restores a batch that was running when the process died. */
+    private fun restoreBatch() {
+        val stored = container.batchState.load() ?: return
+        container.batchState.clear()
+        val pendingPackages = container.pendingInstalls.all().map { it.packageName }.toSet()
+        val items = stored.items.mapValues { (packageName, item) ->
+            when {
+                item.phase == BatchPhase.COMPLETED || item.phase == BatchPhase.FAILED -> item
+                item.phase == BatchPhase.INSTALLING && packageName in pendingPackages -> item
+                else -> item.copy(
+                    phase = BatchPhase.FAILED,
+                    error = "The app restarted before this finished",
+                )
+            }
+        }
+        val interrupted = items.values.any {
+            it.phase == BatchPhase.FAILED || it.phase == BatchPhase.INSTALLING
+        }
+        if (!interrupted) return
+        _batchUpdate.value = stored.copy(
+            running = false,
+            current = null,
+            items = items,
+            interrupted = true,
+        )
+    }
+
+    fun dismissBatch() {
+        batchPersisting = false
+        _batchUpdate.value = null
+        container.batchState.clear()
+    }
+
     /** Downloads several updates in parallel, then installs them one at a time. */
     fun updateAll() {
         if (batchJob?.isActive == true || downloadJob?.isActive == true) return
@@ -1155,6 +1220,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             return
         }
 
+        batchPersisting = true
         _batchUpdate.value = BatchUpdateState(
             running = true,
             total = targets.size,
@@ -1285,15 +1351,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 message("Update all cancelled")
                 throw e
             } finally {
+                batchPersisting = false
                 queue.cancel()
                 _batchUpdate.update { it?.copy(running = false, current = null) }
+                container.batchState.clear()
             }
         }
     }
 
     fun cancelBatch() {
+        batchPersisting = false
         batchJob?.cancel()
         _batchUpdate.update { it?.copy(running = false, current = null) }
+        container.batchState.clear()
     }
 
     private fun updateBatchItem(

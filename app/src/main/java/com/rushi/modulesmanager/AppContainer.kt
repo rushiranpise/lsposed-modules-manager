@@ -17,6 +17,7 @@ class AppContainer(context: Context) {
     val settings = Settings(appContext)
     val moduleState = ModuleStateStore(appContext)
     val pendingInstalls = PendingInstalls.get(appContext)
+    val batchState = BatchStateStore(appContext)
     val api = RepoApi(RepoApi.createClient())
     val liveApi = LiveReleaseApi(RepoApi.createClient())
     val readmeApi = ReadmeApi(RepoApi.createClient())
