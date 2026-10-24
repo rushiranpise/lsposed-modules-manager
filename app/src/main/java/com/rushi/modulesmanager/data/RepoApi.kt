@@ -195,14 +195,17 @@ class RepoApi(private val client: OkHttpClient) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Keep the .part file: the next URL or a retry can continue from it.
                 last = e
-                destination.delete()
-                File(destination.path + ".part").delete()
             }
         }
         throw last ?: IOException("No download URL available")
     }
 
+    /**
+     * Downloads one URL, continuing a previous `.part` file with HTTP Range when possible.
+     * A server that ignores the range (200) restarts the file, and a 416 retries once from zero.
+     */
     private fun downloadOnce(
         url: String,
         destination: File,
@@ -210,33 +213,11 @@ class RepoApi(private val client: OkHttpClient) {
     ): File {
         destination.parentFile?.mkdirs()
         val partial = File(destination.parentFile, destination.name + ".part")
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", USER_AGENT)
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
-            val body = response.body ?: throw IOException("Download failed: empty response")
-            val total = body.contentLength()
-            body.byteStream().use { input ->
-                partial.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var downloaded = 0L
-                    var lastReport = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        downloaded += read
-                        if (downloaded - lastReport >= 128 * 1024 || (total > 0 && downloaded == total)) {
-                            lastReport = downloaded
-                            onProgress(downloaded, total)
-                        }
-                    }
-                    onProgress(downloaded, if (total > 0) total else downloaded)
-                }
-            }
+        val resumed = fetchInto(url, partial, resume = true, onProgress)
+        if (resumed == null) {
+            // 416: the leftover bytes are not usable, start clean once.
+            partial.delete()
+            fetchInto(url, partial, resume = false, onProgress)
         }
 
         if (destination.exists()) destination.delete()
@@ -245,6 +226,75 @@ class RepoApi(private val client: OkHttpClient) {
             partial.delete()
         }
         return destination
+    }
+
+    /** Returns null when the server answered 416 to a range request. */
+    private fun fetchInto(
+        url: String,
+        partial: File,
+        resume: Boolean,
+        onProgress: (downloaded: Long, total: Long) -> Unit,
+    ): Unit? {
+        val existing = if (resume && partial.isFile) partial.length() else 0L
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .apply { if (existing > 0L) header("Range", "bytes=$existing-") }
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (response.code == 416 && existing > 0L) return null
+            if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
+            val body = response.body ?: throw IOException("Download failed: empty response")
+
+            val appending = response.code == 206 && existing > 0L
+            val contentRange = response.header("Content-Range")
+            val start = contentRangeStart(contentRange)
+            if (appending && start != null && start != existing) return null
+
+            val contentLength = body.contentLength()
+            val total = when {
+                !appending -> contentLength
+                else -> contentRangeTotal(contentRange)
+                    ?: if (contentLength >= 0L) existing + contentLength else -1L
+            }
+            var downloaded = if (appending) existing else 0L
+            onProgress(downloaded, total)
+
+            java.io.RandomAccessFile(partial, "rw").use { output ->
+                if (!appending) output.setLength(0)
+                output.seek(downloaded)
+                var lastReport = downloaded
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        downloaded += read
+                        if (downloaded - lastReport >= 128 * 1024 ||
+                            (total > 0 && downloaded == total)
+                        ) {
+                            lastReport = downloaded
+                            onProgress(downloaded, total)
+                        }
+                    }
+                }
+            }
+            onProgress(downloaded, if (total > 0) total else downloaded)
+        }
+        return Unit
+    }
+
+    private fun contentRangeStart(header: String?): Long? {
+        val raw = header?.trim()?.removePrefix("bytes")?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        return raw.substringBefore('/').trim().substringBefore('-').trim().toLongOrNull()
+    }
+
+    private fun contentRangeTotal(header: String?): Long? {
+        val raw = header?.trim()?.removePrefix("bytes")?.trim().orEmpty()
+        return raw.substringAfter('/', "").trim().toLongOrNull()
     }
 
     companion object {

@@ -15,6 +15,7 @@ import com.rushi.modulesmanager.data.ApkInstaller
 import com.rushi.modulesmanager.data.AppTheme
 import com.rushi.modulesmanager.data.DefaultSources
 import com.rushi.modulesmanager.data.DownloadCenter
+import com.rushi.modulesmanager.data.DownloadService
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.InstallerType
@@ -723,6 +724,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             return
         }
 
+        DownloadService.start(appContext)
         val destination = apkDestination(appContext, module, asset)
         downloadJob = viewModelScope.launch {
             try {
