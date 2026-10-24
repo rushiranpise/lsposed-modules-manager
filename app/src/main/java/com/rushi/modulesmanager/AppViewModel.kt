@@ -34,10 +34,14 @@ import com.rushi.modulesmanager.data.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,7 +71,43 @@ data class ModuleUpdate(
     val version: ModuleVersion,
 )
 
+enum class BatchPhase { QUEUED, DOWNLOADING, WAITING_TO_INSTALL, INSTALLING, COMPLETED, FAILED }
+
+data class BatchItemState(
+    val title: String,
+    val phase: BatchPhase,
+    val downloaded: Long = 0L,
+    val total: Long = 0L,
+    val error: String? = null,
+)
+
+data class BatchUpdateState(
+    val running: Boolean,
+    val total: Int,
+    val current: String? = null,
+    val items: Map<String, BatchItemState> = emptyMap(),
+) {
+    val finished: Int
+        get() = items.values.count {
+            it.phase == BatchPhase.COMPLETED || it.phase == BatchPhase.FAILED
+        }
+}
+
+private sealed interface InstallResult {
+    data object Success : InstallResult
+    data object Delegated : InstallResult
+    data class Failure(val message: String) : InstallResult
+}
+
+private data class PreparedInstall(val update: ModuleUpdate, val file: File)
+
 data class TranslationState(val text: String? = null, val loading: Boolean = false)
+
+private data class LibraryState(
+    val skipped: Map<String, String> = emptyMap(),
+    val ignored: Set<String> = emptySet(),
+    val preRelease: Set<String> = emptySet(),
+)
 
 data class ReadmeTranslationState(
     val loading: Boolean = false,
@@ -88,6 +128,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val amoled: StateFlow<Boolean> = settings.amoled
     val systemColors: StateFlow<Boolean> = settings.systemColors
     val updatesFirst: StateFlow<Boolean> = settings.updatesFirst
+    val skippedVersions: StateFlow<Map<String, String>> = container.moduleState.skipped
+    val ignoredUpdates: StateFlow<Set<String>> = container.moduleState.ignored
+    val preReleaseModules: StateFlow<Set<String>> = container.moduleState.preRelease
+
+    private val libraryState = combine(
+        skippedVersions,
+        ignoredUpdates,
+        preReleaseModules,
+    ) { skipped, ignored, preRelease ->
+        LibraryState(skipped = skipped, ignored = ignored, preRelease = preRelease)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, LibraryState())
+
     val autoTranslate: StateFlow<Boolean> = settings.autoTranslate
     val translateLanguage: StateFlow<String?> = settings.translateLanguage
 
@@ -137,10 +189,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _readmeTranslation = MutableStateFlow<ReadmeTranslationState?>(null)
     val readmeTranslation: StateFlow<ReadmeTranslationState?> = _readmeTranslation.asStateFlow()
 
+    private val _batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
+    val batchUpdate: StateFlow<BatchUpdateState?> = _batchUpdate.asStateFlow()
+
     private var detailJob: Job? = null
     private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
-    private var installTimeoutJob: Job? = null
+    private var batchJob: Job? = null
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
     private var liveCheckJob: Job? = null
@@ -150,16 +205,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var detectedModules: List<InstalledModule> = emptyList()
     private var installedVersionMap: Map<String, InstalledPackageVersion> = emptyMap()
 
-    val updates: StateFlow<List<ModuleUpdate>> = combine(modules, repoInstalled, channel) { repoModules, installedModules, selectedChannel ->
+    val updates: StateFlow<List<ModuleUpdate>> = combine(
+        modules,
+        repoInstalled,
+        channel,
+        libraryState,
+    ) { repoModules, installedModules, selectedChannel, library ->
         val byPackage = repoModules.associateBy { it.packageName }
         installedModules.mapNotNull { installedModule ->
             val module = byPackage[installedModule.packageName] ?: return@mapNotNull null
-            val latest = module.latest(selectedChannel) ?: return@mapNotNull null
-            if (latest.isNewerThan(installedModule.versionCode, installedModule.versionName)) {
-                ModuleUpdate(installedModule, module, latest)
-            } else {
-                null
+            if (installedModule.packageName in library.ignored || module.packageName in library.ignored) {
+                return@mapNotNull null
             }
+            val includePreRelease = selectedChannel == UpdateChannel.PRE_RELEASE ||
+                module.packageName in library.preRelease ||
+                installedModule.packageName in library.preRelease
+            val latest = module.latestFor(includePreRelease) ?: return@mapNotNull null
+            val skipped = library.skipped[installedModule.packageName]
+                ?: library.skipped[module.packageName]
+            if (skipped != null && skipped == module.latestRawFor(includePreRelease)) {
+                return@mapNotNull null
+            }
+            val version = _installedVersions.value[installedModule.packageName]
+            val isUpdate = if (version != null) {
+                latest.isUpdateOver(version, module.latestTimeFor(includePreRelease))
+            } else {
+                latest.isNewerThan(installedModule.versionCode, installedModule.versionName)
+            }
+            if (isUpdate) ModuleUpdate(installedModule, module, latest) else null
         }.sortedBy { it.module.displayName.lowercase() }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -602,14 +675,47 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun updateFor(packageName: String): ModuleUpdate? = updates.value.firstOrNull { it.installed.packageName == packageName }
 
+    fun canTrackPreReleases(module: RepoModule): Boolean =
+        !module.latestBetaRelease.isNullOrBlank()
+
+    fun skipVersion(module: RepoModule) {
+        val includePreRelease = includePreReleases(module)
+        val raw = module.latestRawFor(includePreRelease)
+        if (raw.isNullOrBlank()) {
+            message("There is no version to skip")
+            return
+        }
+        container.moduleState.skipVersion(module.packageName, raw)
+        message("Skipped ${module.latestFor(includePreRelease)?.name ?: raw}")
+    }
+
+    fun clearSkippedVersion(module: RepoModule) {
+        container.moduleState.clearSkippedVersion(module.packageName)
+        message("Skipped version cleared")
+    }
+
+    fun toggleIgnoreUpdates(module: RepoModule) {
+        val ignored = container.moduleState.toggleIgnored(module.packageName)
+        message(if (ignored) "Updates ignored for ${module.displayName}" else "Updates restored")
+    }
+
+    fun togglePreReleases(module: RepoModule) {
+        val enabled = container.moduleState.togglePreRelease(module.packageName)
+        message(if (enabled) "Following pre-releases for ${module.displayName}" else "Following stable releases")
+    }
+
+    private fun includePreReleases(module: RepoModule): Boolean =
+        channel.value == UpdateChannel.PRE_RELEASE ||
+            module.packageName in preReleaseModules.value
+
     fun install(module: RepoModule, asset: RepoAsset) {
-        if (downloads.value != null || downloadJob?.isActive == true) {
-            message("Wait for the current download to finish")
+        if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
+            message("Wait for the current install to finish")
             return
         }
         val appContext = container.appContext
         val installerType = settings.installer.value
-        if (installerType != InstallerType.SHIZUKU && installerType != InstallerType.ROOT &&
+        if ((installerType == InstallerType.SYSTEM || installerType == InstallerType.SESSION) &&
             !ApkInstaller.canInstall(appContext)
         ) {
             message("Allow \"Install unknown apps\" for Modules Manager, then try again")
@@ -617,10 +723,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             return
         }
 
-        val destination = File(appContext.cacheDir, "apk")
-            .apply { mkdirs() }
-            .resolve(asset.name.sanitizeFileName())
-
+        val destination = apkDestination(appContext, module, asset)
         downloadJob = viewModelScope.launch {
             try {
                 container.downloads.update(
@@ -633,100 +736,22 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         phase = DownloadCenter.Phase.DOWNLOADING,
                     ),
                 )
-                val file = container.api.download(
-                    urls = listOfNotNull(asset.downloadUrl, asset.originalDownloadUrl),
-                    destination = destination,
-                ) { done, total ->
+                val file = downloadApk(appContext, module, asset, destination) { done, total ->
                     container.downloads.progress(done, total)
                 }
-                container.downloads.phase(DownloadCenter.Phase.VERIFYING)
-
-                val info = withContext(Dispatchers.IO) { ApkInspector.inspect(appContext, file) }
-                    ?: throw IllegalStateException("The downloaded file is not a valid APK")
-                if (info.packageName != module.packageName) {
-                    throw IllegalStateException("This release contains ${info.packageName}, not ${module.packageName}")
-                }
-                val installedPackage = _installedVersions.value[module.packageName]
-                if (installedPackage != null) {
-                    if (info.versionCode < installedPackage.versionCode) {
-                        throw IllegalStateException("This release is older than the installed version")
-                    }
-                    val installedSignature = withContext(Dispatchers.IO) {
-                        ApkInspector.installedSignatureDigest(appContext, module.packageName)
-                    }
-                    if (installedSignature != null && info.signatureDigest != null &&
-                        installedSignature != info.signatureDigest
-                    ) {
-                        throw IllegalStateException(
-                            "This APK is signed with a different key, so Android cannot update the installed app",
-                        )
-                    }
-                }
-
                 container.downloads.phase(DownloadCenter.Phase.INSTALLING)
-                when (installerType) {
-                    InstallerType.SYSTEM -> {
-                        val launched = ApkInstaller.installSystem(appContext, file)
-                        container.downloads.update(null)
-                        if (launched) {
-                            message("Opening the system installer")
-                        } else {
-                            message("Could not open a system installer")
-                            file.delete()
-                        }
+                val result = installDownloaded(appContext, file, module, announce = true)
+                container.downloads.update(null)
+                when (result) {
+                    InstallResult.Success -> {
+                        message("${module.displayName} installed")
+                        rescan()
+                        file.delete()
                     }
-                    InstallerType.SESSION -> runSessionInstall(appContext, file, module)
-                    InstallerType.SHIZUKU -> {
-                        if (ShizukuInstaller.ensurePermission()) {
-                            val problem = ShizukuInstaller.install(file)
-                            container.downloads.update(null)
-                            if (problem == null) {
-                                message("${module.displayName} installed")
-                                rescan()
-                            } else {
-                                message(problem)
-                            }
-                            file.delete()
-                        } else {
-                            refreshShizukuStatus()
-                            val reason = if (!ShizukuInstaller.isRunning()) {
-                                "Shizuku is not running"
-                            } else {
-                                "Shizuku permission was not granted"
-                            }
-                            message("$reason, using the session installer")
-                            if (ApkInstaller.canInstall(appContext)) {
-                                runSessionInstall(appContext, file, module)
-                            } else {
-                                container.downloads.update(null)
-                                file.delete()
-                                message("Allow unknown apps for Modules Manager, then try again")
-                                ApkInstaller.openInstallPermissionSettings(appContext)
-                            }
-                        }
-                    }
-                    InstallerType.ROOT -> {
-                        if (!RootInstaller.isAvailable()) {
-                            message("Root access is not granted, using the session installer")
-                            if (ApkInstaller.canInstall(appContext)) {
-                                runSessionInstall(appContext, file, module)
-                            } else {
-                                container.downloads.update(null)
-                                file.delete()
-                                message("Allow unknown apps for Modules Manager, then try again")
-                                ApkInstaller.openInstallPermissionSettings(appContext)
-                            }
-                        } else {
-                            val problem = RootInstaller.install(file, appContext.packageName)
-                            container.downloads.update(null)
-                            if (problem == null) {
-                                message("${module.displayName} installed")
-                                rescan()
-                            } else {
-                                message(problem)
-                            }
-                            file.delete()
-                        }
+                    InstallResult.Delegated -> message("Opening the system installer")
+                    is InstallResult.Failure -> {
+                        message(result.message)
+                        file.delete()
                     }
                 }
             } catch (e: CancellationException) {
@@ -743,11 +768,290 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    private fun apkDestination(context: Context, module: RepoModule, asset: RepoAsset): File =
+        File(context.cacheDir, "apk")
+            .apply { mkdirs() }
+            .resolve("${module.packageName}-${asset.name}".sanitizeFileName())
+
+    /** Downloads and validates one APK. Shared by single installs and the update queue. */
+    private suspend fun downloadApk(
+        context: Context,
+        module: RepoModule,
+        asset: RepoAsset,
+        destination: File,
+        onProgress: (downloaded: Long, total: Long) -> Unit,
+    ): File {
+        val file = container.api.download(
+            urls = listOfNotNull(asset.downloadUrl, asset.originalDownloadUrl),
+            destination = destination,
+            onProgress = onProgress,
+        )
+        val info = withContext(Dispatchers.IO) { ApkInspector.inspect(context, file) }
+            ?: throw IllegalStateException("The downloaded file is not a valid APK")
+        if (info.packageName != module.packageName) {
+            throw IllegalStateException("This release contains ${info.packageName}, not ${module.packageName}")
+        }
+        val installedPackage = _installedVersions.value[module.packageName]
+        if (installedPackage != null) {
+            if (info.versionCode < installedPackage.versionCode) {
+                throw IllegalStateException("This release is older than the installed version")
+            }
+            val installedSignature = withContext(Dispatchers.IO) {
+                ApkInspector.installedSignatureDigest(context, module.packageName)
+            }
+            if (installedSignature != null && info.signatureDigest != null &&
+                installedSignature != info.signatureDigest
+            ) {
+                throw IllegalStateException(
+                    "This APK is signed with a different key, so Android cannot update the installed app",
+                )
+            }
+        }
+        return file
+    }
+
+    private suspend fun installDownloaded(
+        context: Context,
+        file: File,
+        module: RepoModule,
+        announce: Boolean,
+    ): InstallResult {
+        return when (settings.installer.value) {
+            InstallerType.SYSTEM -> if (ApkInstaller.installSystem(context, file)) {
+                InstallResult.Delegated
+            } else {
+                InstallResult.Failure("Could not open a system installer")
+            }
+            InstallerType.SESSION -> installSession(context, file)
+            InstallerType.SHIZUKU -> {
+                if (ShizukuInstaller.ensurePermission()) {
+                    val problem = ShizukuInstaller.install(file)
+                    if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
+                } else {
+                    refreshShizukuStatus()
+                    val reason = if (!ShizukuInstaller.isRunning()) {
+                        "Shizuku is not running"
+                    } else {
+                        "Shizuku permission was not granted"
+                    }
+                    if (announce) message("$reason, using the session installer")
+                    sessionFallback(context, file)
+                }
+            }
+            InstallerType.ROOT -> {
+                if (RootInstaller.isAvailable()) {
+                    val problem = RootInstaller.install(file, context.packageName)
+                    if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
+                } else {
+                    if (announce) message("Root access is not granted, using the session installer")
+                    sessionFallback(context, file)
+                }
+            }
+        }
+    }
+
+    private suspend fun sessionFallback(context: Context, file: File): InstallResult =
+        if (ApkInstaller.canInstall(context)) {
+            installSession(context, file)
+        } else {
+            ApkInstaller.openInstallPermissionSettings(context)
+            InstallResult.Failure("Allow unknown apps for Modules Manager, then try again")
+        }
+
+    private suspend fun installSession(context: Context, file: File): InstallResult {
+        val result = withTimeoutOrNull(INSTALL_TIMEOUT_MS) {
+            val outcome = CompletableDeferred<Pair<Int, String?>>()
+            launch {
+                ApkInstaller.installSession(context, file) { status, reason ->
+                    outcome.complete(status to reason)
+                }
+            }
+            outcome.await()
+        }
+        if (result == null) {
+            ApkInstaller.abandonPendingSession(context)
+            return InstallResult.Failure("The install timed out")
+        }
+        val (status, reason) = result
+        return if (status == PackageInstaller.STATUS_SUCCESS) {
+            InstallResult.Success
+        } else {
+            InstallResult.Failure(installFailureMessage(status, reason))
+        }
+    }
+
+    /** Downloads several updates in parallel, then installs them one at a time. */
+    fun updateAll() {
+        if (batchJob?.isActive == true || downloadJob?.isActive == true) return
+        val targets = updates.value
+        if (targets.isEmpty()) {
+            message("No updates available")
+            return
+        }
+        val appContext = container.appContext
+        val installerType = settings.installer.value
+        if ((installerType == InstallerType.SYSTEM || installerType == InstallerType.SESSION) &&
+            !ApkInstaller.canInstall(appContext)
+        ) {
+            message("Allow \"Install unknown apps\" for Modules Manager, then try again")
+            ApkInstaller.openInstallPermissionSettings(appContext)
+            return
+        }
+
+        _batchUpdate.value = BatchUpdateState(
+            running = true,
+            total = targets.size,
+            items = targets.associate {
+                it.module.packageName to BatchItemState(it.module.displayName, BatchPhase.QUEUED)
+            },
+        )
+        batchJob = viewModelScope.launch {
+            val failures = java.util.Collections.synchronizedList(mutableListOf<String>())
+            val queue = Channel<PreparedInstall>(Channel.UNLIMITED)
+            try {
+                coroutineScope {
+                    val slots = Semaphore(3)
+                    val downloads = targets.map { update ->
+                        launch {
+                            val packageName = update.module.packageName
+                            updateBatchItem(packageName) { it.copy(phase = BatchPhase.DOWNLOADING) }
+                            slots.withPermit {
+                                try {
+                                    val detailed = container.repo.loadModule(
+                                        DefaultSources.official,
+                                        packageName,
+                                    ) ?: update.module
+                                    val includePreRelease = includePreReleases(detailed)
+                                    val latest = detailed.latestFor(includePreRelease) ?: update.version
+                                    val release = detailed.releaseForVersion(latest, includePreRelease)
+                                    if (release == null || !release.matchesVersion(latest)) {
+                                        throw IllegalStateException("Repository is serving an older release")
+                                    }
+                                    val asset = release.apkAssets.firstOrNull()
+                                        ?: throw IllegalStateException("No APK asset")
+                                    updateBatchItem(packageName) { it.copy(total = asset.size) }
+                                    val file = downloadApk(
+                                        appContext,
+                                        update.module,
+                                        asset,
+                                        apkDestination(appContext, update.module, asset),
+                                    ) { downloaded, total ->
+                                        updateBatchItem(packageName) {
+                                            it.copy(
+                                                downloaded = downloaded,
+                                                total = if (total > 0L) total else it.total,
+                                            )
+                                        }
+                                    }
+                                    updateBatchItem(packageName) {
+                                        it.copy(
+                                            phase = BatchPhase.WAITING_TO_INSTALL,
+                                            downloaded = it.total,
+                                        )
+                                    }
+                                    queue.send(PreparedInstall(update, file))
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    val reason = e.userMessage()
+                                    failures += "${update.module.displayName}: $reason"
+                                    updateBatchItem(packageName) {
+                                        it.copy(phase = BatchPhase.FAILED, error = reason)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    val installer = launch {
+                        for (prepared in queue) {
+                            val update = prepared.update
+                            val packageName = update.module.packageName
+                            _batchUpdate.update {
+                                it?.copy(current = update.module.displayName)
+                            }
+                            updateBatchItem(packageName) { it.copy(phase = BatchPhase.INSTALLING) }
+                            val result = try {
+                                installDownloaded(appContext, prepared.file, update.module, announce = false)
+                            } catch (e: CancellationException) {
+                                prepared.file.delete()
+                                throw e
+                            } catch (e: Exception) {
+                                InstallResult.Failure(e.userMessage())
+                            }
+                            when (result) {
+                                InstallResult.Success -> {
+                                    updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
+                                    prepared.file.delete()
+                                }
+                                InstallResult.Delegated -> {
+                                    updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
+                                }
+                                is InstallResult.Failure -> {
+                                    failures += "${update.module.displayName}: ${result.message}"
+                                    updateBatchItem(packageName) {
+                                        it.copy(phase = BatchPhase.FAILED, error = result.message)
+                                    }
+                                    prepared.file.delete()
+                                }
+                            }
+                        }
+                    }
+
+                    downloads.joinAll()
+                    queue.close()
+                    installer.join()
+                }
+                rescan()
+                val failed = synchronized(failures) { failures.toList() }
+                val summary = if (failed.isEmpty()) {
+                    "Updated ${targets.size} modules"
+                } else {
+                    "Updated ${targets.size - failed.size} of ${targets.size}; failed: " +
+                        failed.take(3).joinToString("; ")
+                }
+                message(summary)
+            } catch (e: CancellationException) {
+                message("Update all cancelled")
+                throw e
+            } finally {
+                queue.cancel()
+                _batchUpdate.update { it?.copy(running = false, current = null) }
+            }
+        }
+    }
+
+    fun cancelBatch() {
+        batchJob?.cancel()
+        _batchUpdate.update { it?.copy(running = false, current = null) }
+    }
+
+    private fun updateBatchItem(
+        packageName: String,
+        transform: (BatchItemState) -> BatchItemState,
+    ) {
+        _batchUpdate.update { state ->
+            val item = state?.items?.get(packageName) ?: return@update state
+            state.copy(items = state.items + (packageName to transform(item)))
+        }
+    }
+
     /** Resolves the newest APK for an installed module and starts installing it. */
     fun installLatest(module: RepoModule) {
         viewModelScope.launch {
             val detailed = container.repo.loadModule(DefaultSources.official, module.packageName) ?: module
-            val asset = detailed.releaseFor(channel.value)?.apkAssets?.firstOrNull()
+            val includePreRelease = includePreReleases(detailed)
+            val latest = detailed.latestFor(includePreRelease)
+            val release = if (latest != null) {
+                detailed.releaseForVersion(latest, includePreRelease)
+            } else {
+                detailed.releaseFor(channel.value)
+            }
+            if (latest != null && release != null && !release.matchesVersion(latest)) {
+                message("The repository is still serving an older release")
+                return@launch
+            }
+            val asset = release?.apkAssets?.firstOrNull()
             if (asset == null) {
                 message("No APK is available for ${module.displayName}")
                 return@launch
@@ -889,30 +1193,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }.onFailure { message("No app can open this link") }
-    }
-
-    private suspend fun runSessionInstall(appContext: Context, file: File, module: RepoModule) {
-        installTimeoutJob?.cancel()
-        installTimeoutJob = viewModelScope.launch {
-            delay(INSTALL_TIMEOUT_MS)
-            if (container.downloads.state.value != null) {
-                ApkInstaller.abandonPendingSession(appContext)
-                container.downloads.update(null)
-                file.delete()
-                message("The install timed out")
-            }
-        }
-        ApkInstaller.installSession(appContext, file) { status, reason ->
-            installTimeoutJob?.cancel()
-            if (status == PackageInstaller.STATUS_SUCCESS) {
-                message("${module.displayName} installed")
-                rescan()
-            } else {
-                message(installFailureMessage(status, reason))
-            }
-            container.downloads.update(null)
-            file.delete()
-        }
     }
 
     private fun installFailureMessage(status: Int, reason: String?): String = when (status) {

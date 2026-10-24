@@ -57,6 +57,13 @@ data class RepoRelease(
             return value.startsWith("snapshot") || value.startsWith("nightly")
         }
 
+    /** True when this release is the exact version an update check promised. */
+    fun matchesVersion(version: ModuleVersion): Boolean {
+        val releaseVersion = ModuleVersion.parse(tagName) ?: return false
+        return releaseVersion.code == version.code &&
+            releaseVersion.name.replace(' ', '_') == version.name.replace(' ', '_')
+    }
+
     fun supports(channel: UpdateChannel): Boolean = when (channel) {
         UpdateChannel.STABLE -> !isPrerelease && !isSnapshot
         UpdateChannel.PRE_RELEASE -> true
@@ -96,15 +103,50 @@ data class RepoModule(
     val hasReleases: Boolean
         get() = releases.isNotEmpty() || betaReleases.isNotEmpty() || snapshotReleases.isNotEmpty()
 
-    fun latest(channel: UpdateChannel): ModuleVersion? = when (channel) {
-        UpdateChannel.STABLE -> ModuleVersion.parse(latestRelease)
-        UpdateChannel.PRE_RELEASE ->
-            ModuleVersion.parse(latestBetaRelease) ?: ModuleVersion.parse(latestRelease)
+    fun latest(channel: UpdateChannel): ModuleVersion? =
+        latestFor(channel == UpdateChannel.PRE_RELEASE)
+
+    /**
+     * Newest version across the streams that are being followed. A pre-release is not
+     * automatically better: 24 of the modules that publish betas ship one with an older
+     * versionCode than stable, so both are compared and the newer one wins.
+     */
+    fun latestFor(includePreReleases: Boolean): ModuleVersion? =
+        ModuleVersion.parse(latestRawFor(includePreReleases))
+
+    fun latestTime(channel: UpdateChannel): String? =
+        latestTimeFor(channel == UpdateChannel.PRE_RELEASE)
+
+    fun latestTimeFor(includePreReleases: Boolean): String? =
+        chosenStream(includePreReleases).second
+
+    /** Repository tag of the version [latestFor] returns, used for per-version skips. */
+    fun latestRawFor(includePreReleases: Boolean): String? =
+        chosenStream(includePreReleases).first
+
+    private fun chosenStream(includePreReleases: Boolean): Pair<String?, String?> {
+        val stable = latestRelease
+        if (!includePreReleases) return stable to latestReleaseTime
+        val beta = latestBetaRelease ?: return stable to latestReleaseTime
+        val betaTime = latestBetaReleaseTime ?: latestReleaseTime
+        if (stable == null) return beta to betaTime
+        val stableVersion = ModuleVersion.parse(stable)
+        val betaVersion = ModuleVersion.parse(beta)
+        if (stableVersion == null || betaVersion == null) return stable to latestReleaseTime
+        return when {
+            betaVersion.code > stableVersion.code -> beta to betaTime
+            betaVersion.code < stableVersion.code -> stable to latestReleaseTime
+            betaTime.orEmpty() > latestReleaseTime.orEmpty() -> beta to betaTime
+            else -> stable to latestReleaseTime
+        }
     }
 
-    fun latestTime(channel: UpdateChannel): String? = when (channel) {
-        UpdateChannel.STABLE -> latestReleaseTime
-        UpdateChannel.PRE_RELEASE -> latestBetaReleaseTime ?: latestReleaseTime
+    /** The release that actually carries [version], falling back to the channel release. */
+    fun releaseForVersion(version: ModuleVersion, includePreReleases: Boolean): RepoRelease? {
+        val matching = allReleases().firstOrNull { it.matchesVersion(version) }
+        return matching ?: releaseFor(
+            if (includePreReleases) UpdateChannel.PRE_RELEASE else UpdateChannel.STABLE,
+        )
     }
 
     /** Every release the repository published, newest first, whichever channel it belongs to. */
@@ -165,6 +207,23 @@ data class ModuleVersion(val code: Long, val name: String) {
             return code > installedCode
         }
         return compareVersionNames(name, installedName) > 0
+    }
+
+    /**
+     * LSPosed treats a same-code re-upload as an update, but only when the release was published
+     * after the installed copy landed. Without the timestamp, naming drift would report an update
+     * forever and installing it would never clear the prompt.
+     */
+    fun isUpdateOver(installed: InstalledPackageVersion, publishedAt: String?): Boolean {
+        if (code > 0L && installed.versionCode > 0L) {
+            if (code != installed.versionCode) return code > installed.versionCode
+            val sameName = name.replace(' ', '_') ==
+                installed.versionName.orEmpty().replace(' ', '_')
+            if (sameName) return false
+            val published = parseInstant(publishedAt)?.toEpochMilli() ?: return false
+            return installed.lastUpdateTime > 0L && published > installed.lastUpdateTime
+        }
+        return compareVersionNames(name, installed.versionName) > 0
     }
 
     companion object {

@@ -24,6 +24,8 @@ data class InstalledModule(
 data class InstalledPackageVersion(
     val versionName: String?,
     val versionCode: Long,
+    /** PackageManager install/update time, used to notice same-code re-uploads. */
+    val lastUpdateTime: Long = 0L,
 )
 
 data class InstalledModulesResult(
@@ -47,7 +49,11 @@ class InstalledModuleScanner(private val context: Context) {
                 @Suppress("DEPRECATION")
                 info.versionCode.toLong()
             }
-            versions[info.packageName] = InstalledPackageVersion(info.versionName, versionCode)
+            versions[info.packageName] = InstalledPackageVersion(
+                versionName = info.versionName,
+                versionCode = versionCode,
+                lastUpdateTime = info.lastUpdateTime,
+            )
 
             if (info.packageName == context.packageName) continue
             if (!isXposedModule(info)) continue

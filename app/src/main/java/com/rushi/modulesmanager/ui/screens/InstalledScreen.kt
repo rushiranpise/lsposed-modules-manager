@@ -22,13 +22,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +59,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
+import com.rushi.modulesmanager.BatchPhase
+import com.rushi.modulesmanager.BatchUpdateState
 import com.rushi.modulesmanager.ModuleUpdate
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
@@ -77,6 +84,10 @@ fun InstalledScreen(
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
+    val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
+    val ignoredUpdates by viewModel.ignoredUpdates.collectAsStateWithLifecycle()
+    val preReleaseModules by viewModel.preReleaseModules.collectAsStateWithLifecycle()
+    val skippedVersions by viewModel.skippedVersions.collectAsStateWithLifecycle()
 
     var filter by rememberSaveable { mutableStateOf(InstalledFilter.ALL) }
     var pendingUninstall by remember { mutableStateOf<InstalledModule?>(null) }
@@ -152,6 +163,25 @@ fun InstalledScreen(
                 )
             }
 
+            if (batch?.running == true) {
+                BatchProgressCard(state = batch!!, onCancel = viewModel::cancelBatch)
+            } else if (updates.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = viewModel::updateAll,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Update all (${updates.size})")
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -192,13 +222,28 @@ fun InstalledScreen(
                         }
                     } else {
                         items(visible, key = { it.packageName }) { module ->
+                            val repoModule = modulesByPackage[module.packageName]
                             InstalledCard(
                                 module = module,
-                                repoModule = modulesByPackage[module.packageName],
+                                repoModule = repoModule,
                                 update = updatesByPackage[module.packageName],
-                                onOpenRepository = { onOpenModule(module.packageName) },
+                                ignored = module.packageName in ignoredUpdates ||
+                                    (repoModule != null && repoModule.packageName in ignoredUpdates),
+                                skippedVersion = repoModule?.let { skippedVersions[it.packageName] },
+                                preReleases = repoModule != null &&
+                                    repoModule.packageName in preReleaseModules,
+                                canTrackPreReleases = repoModule != null &&
+                                    viewModel.canTrackPreReleases(repoModule),
+                                onOpenRepository = {
+                                    onOpenModule(repoModule?.packageName ?: module.packageName)
+                                },
                                 onOpenApp = { viewModel.openInstalledModule(module.packageName) },
                                 onUpdate = { update -> viewModel.installLatest(update.module) },
+                                onSkipVersion = { repoModule?.let(viewModel::skipVersion) },
+                                onClearSkipped = { repoModule?.let(viewModel::clearSkippedVersion) },
+                                onToggleIgnore = { repoModule?.let(viewModel::toggleIgnoreUpdates) },
+                                onTogglePreRelease = { repoModule?.let(viewModel::togglePreReleases) },
+                                onAppInfo = { viewModel.openAppInfo(module.packageName) },
                                 onUninstall = { pendingUninstall = module },
                             )
                         }
@@ -260,12 +305,22 @@ private fun InstalledCard(
     module: InstalledModule,
     repoModule: RepoModule?,
     update: ModuleUpdate?,
+    ignored: Boolean,
+    skippedVersion: String?,
+    preReleases: Boolean,
+    canTrackPreReleases: Boolean,
     onOpenRepository: () -> Unit,
     onOpenApp: () -> Unit,
     onUpdate: (ModuleUpdate) -> Unit,
+    onSkipVersion: () -> Unit,
+    onClearSkipped: () -> Unit,
+    onToggleIgnore: () -> Unit,
+    onTogglePreRelease: () -> Unit,
+    onAppInfo: () -> Unit,
     onUninstall: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
+    var menuOpen by remember { mutableStateOf(false) }
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -313,6 +368,80 @@ private fun InstalledCard(
                             Text("Install", style = MaterialTheme.typography.labelMedium)
                         }
                     }
+                    Box {
+                        IconButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.size(34.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.MoreVert,
+                                contentDescription = "More actions",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            if (update != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Skip this version") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onSkipVersion()
+                                    },
+                                )
+                            }
+                            if (skippedVersion != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Clear skipped version") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onClearSkipped()
+                                    },
+                                )
+                            }
+                            if (repoModule != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(if (ignored) "Restore updates" else "Ignore updates")
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        onToggleIgnore()
+                                    },
+                                )
+                            }
+                            if (canTrackPreReleases) {
+                                DropdownMenuItem(
+                                    text = { Text("Follow pre-releases") },
+                                    leadingIcon = {
+                                        if (preReleases) {
+                                            Icon(Icons.Outlined.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        onTogglePreRelease()
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("App info") },
+                                onClick = {
+                                    menuOpen = false
+                                    onAppInfo()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Uninstall") },
+                                onClick = {
+                                    menuOpen = false
+                                    onUninstall()
+                                },
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(1.dp))
                 PackageLabel(module.packageName)
@@ -331,6 +460,10 @@ private fun InstalledCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     when {
+                        ignored -> StatusPill(text = "Updates ignored")
+                        skippedVersion != null -> StatusPill(
+                            text = "Skipped ${shortVersion(skippedVersion.substringAfter('-'))}",
+                        )
                         update != null -> StatusPill(
                             text = "Update ${shortVersion(update.version.name)}",
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -345,6 +478,42 @@ private fun InstalledCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun BatchProgressCard(state: BatchUpdateState, onCancel: () -> Unit) {
+    val fraction = if (state.total > 0) state.finished.toFloat() / state.total else 0f
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.current?.let { "Installing $it" } ?: "Preparing updates",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${state.finished} of ${state.total} done",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
