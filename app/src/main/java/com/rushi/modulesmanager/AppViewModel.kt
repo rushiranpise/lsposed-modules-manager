@@ -819,6 +819,32 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         message("Manual link removed")
     }
 
+    /** Only index modules can have their source corrected; manual links already have one. */
+    fun canOverrideSource(packageName: String): Boolean =
+        container.repo.cachedModule(packageName) != null
+
+    fun hasSourceOverride(packageName: String): Boolean =
+        container.moduleState.sourceOverride(packageName) != null
+
+    /** Corrects the owner and repository used for a module's avatar, README and links. */
+    fun setModuleSource(module: RepoModule, input: String): Boolean {
+        val repo = parseGithubRepo(input)
+        if (repo == null) {
+            message("Paste a GitHub URL like https://github.com/owner/repo")
+            return false
+        }
+        container.repo.setSourceOverride(module.packageName, repo)
+        _detail.value = container.repo.cachedModule(module.packageName) ?: _detail.value
+        message("Source set to $repo")
+        return true
+    }
+
+    fun clearModuleSource(packageName: String) {
+        container.repo.setSourceOverride(packageName, null)
+        _detail.value = container.repo.cachedModule(packageName) ?: _detail.value
+        message("Source reset to the index")
+    }
+
     private suspend fun refreshManualModules(links: Map<String, String>) {
         _manualModules.update { current -> current.filterKeys { it in links } }
         for ((packageName, repo) in links) {

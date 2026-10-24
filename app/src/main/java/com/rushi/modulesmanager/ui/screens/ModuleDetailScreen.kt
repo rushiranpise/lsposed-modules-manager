@@ -32,10 +32,12 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -110,6 +113,8 @@ fun ModuleDetailScreen(
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOriginalReadme by rememberSaveable(packageName) { mutableStateOf(false) }
+    var editingSource by remember { mutableStateOf(false) }
+    var sourceInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val module = detail
@@ -197,6 +202,17 @@ fun ModuleDetailScreen(
                             contentDescription = "Copy package name",
                         )
                     }
+                    if (module != null && viewModel.canOverrideSource(packageName)) {
+                        IconButton(onClick = {
+                            sourceInput = module.githubRepoFullName() ?: module.sourceUrl.orEmpty()
+                            editingSource = true
+                        }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = "Set source repository",
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -277,6 +293,45 @@ fun ModuleDetailScreen(
         }
     }
 
+    if (editingSource && module != null) {
+        AlertDialog(
+            onDismissRequest = { editingSource = false },
+            title = { Text("Set source repository") },
+            text = {
+                Column {
+                    Text(
+                        text = "Used for the owner, avatar, README and release links when the index points to a fork or the wrong repository.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = sourceInput,
+                        onValueChange = { sourceInput = it },
+                        placeholder = { Text("owner/repo or https://github.com/owner/repo") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (viewModel.setModuleSource(module, sourceInput)) editingSource = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                Row {
+                    if (viewModel.hasSourceOverride(packageName)) {
+                        TextButton(onClick = {
+                            viewModel.clearModuleSource(packageName)
+                            editingSource = false
+                        }) { Text("Reset") }
+                    }
+                    TextButton(onClick = { editingSource = false }) { Text("Cancel") }
+                }
+            },
+        )
+    }
 }
 
 @Composable

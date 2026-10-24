@@ -30,6 +30,10 @@ class ModuleStateStore(context: Context) {
     /** The APK variant picked for a package, so later releases do not ask again. */
     private val _variants = MutableStateFlow(readMap(KEY_VARIANTS))
 
+    /** User-corrected source repositories for modules the index points at a fork or wrong owner. */
+    private val _sources = MutableStateFlow(readMap(KEY_SOURCES))
+    val sourceOverrides: StateFlow<Map<String, String>> = _sources.asStateFlow()
+
     fun skipVersion(packageName: String, raw: String) {
         val updated = _skipped.value + (packageName to raw)
         _skipped.value = updated
@@ -68,6 +72,18 @@ class ModuleStateStore(context: Context) {
         val updated = _links.value - installedPackage
         _links.value = updated
         writeMap(KEY_LINKS, updated)
+    }
+
+    fun sourceOverride(packageName: String): String? = _sources.value[packageName]
+
+    fun setSourceOverride(packageName: String, repoFullName: String?) {
+        val updated = if (repoFullName.isNullOrBlank()) {
+            _sources.value - packageName
+        } else {
+            _sources.value + (packageName to repoFullName)
+        }
+        _sources.value = updated
+        writeMap(KEY_SOURCES, updated)
     }
 
     fun variantFor(packageName: String): String? = _variants.value[packageName]
@@ -111,5 +127,6 @@ class ModuleStateStore(context: Context) {
         const val KEY_PRE_RELEASE = "pre_release_modules"
         const val KEY_LINKS = "module_links"
         const val KEY_VARIANTS = "module_variants"
+        const val KEY_SOURCES = "module_sources"
     }
 }

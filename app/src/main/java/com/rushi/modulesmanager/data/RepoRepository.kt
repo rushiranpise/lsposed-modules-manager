@@ -16,6 +16,7 @@ import kotlin.coroutines.coroutineContext
 class RepoRepository(
     private val context: Context,
     private val api: RepoApi,
+    private val moduleState: ModuleStateStore,
 ) {
     private val _modules = MutableStateFlow<List<RepoModule>>(emptyList())
     val modules: StateFlow<List<RepoModule>> = _modules.asStateFlow()
@@ -40,12 +41,16 @@ class RepoRepository(
     private var activeSourceId: String? = null
     private var packagesWithoutReleases: Set<String> = emptySet()
 
+    /** Index modules before a user source override, used when the override is reset. */
+    private var originalModules: Map<String, RepoModule> = emptyMap()
+
     suspend fun load(source: RepoSource) {
         val switching = activeSourceId != source.id
         if (switching) {
             activeSourceId = source.id
             details.clear()
             val cached = readCache(source)
+            originalModules = cached?.rawModules?.associateBy { it.packageName }.orEmpty()
             _modules.value = cached?.modules.orEmpty()
             _lastUpdated.value = cached?.savedAt
             _updatedAt.value = readUpdatedAt(source)
@@ -58,7 +63,9 @@ class RepoRepository(
             val fetched = api.fetchModules(source)
             coroutineContext.ensureActive()
             if (activeSourceId != source.id) return
-            _modules.value = fetched.modules.filterNot { it.hide }
+            val baseModules = fetched.modules.filterNot { it.hide }
+            originalModules = baseModules.associateBy { it.packageName }
+            _modules.value = baseModules.map(::applySourceOverride)
             if (source.format == RepoFormat.REPOS_JSON) {
                 packagesWithoutReleases = RepoJson.packagesWithoutReleases(fetched.rawJson)
             }
@@ -78,6 +85,7 @@ class RepoRepository(
             if (_modules.value.isEmpty()) {
                 val cached = readCache(source)
                 if (cached != null) {
+                    originalModules = cached.rawModules.associateBy { it.packageName }
                     _modules.value = cached.modules
                     _lastUpdated.value = cached.savedAt
                     _error.value = "Showing cached data. ${e.userMessage()}"
@@ -187,11 +195,42 @@ class RepoRepository(
         lowercase().filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "und" }
 
     private fun readmeFile(packageName: String, extension: String): File {
-        val digest = MessageDigest.getInstance("SHA-256")
+        val prefix = readmePrefix(packageName)
+        return File(context.filesDir, "readme-cache").apply { mkdirs() }.resolve("$prefix.$extension")
+    }
+
+    private fun readmePrefix(packageName: String): String =
+        MessageDigest.getInstance("SHA-256")
             .digest(packageName.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 16)
-        return File(context.filesDir, "readme-cache").apply { mkdirs() }.resolve("$digest.$extension")
+
+    /** Applies or clears a user source override, updating the list and any open detail. */
+    fun setSourceOverride(packageName: String, repoFullName: String?) {
+        moduleState.setSourceOverride(packageName, repoFullName)
+        clearReadmeCache(packageName)
+        fun RepoModule.withOverride(): RepoModule =
+            if (!repoFullName.isNullOrBlank()) {
+                withSourceOverride(repoFullName)
+            } else {
+                originalModules[packageName]?.let { original -> withOriginalSource(original) } ?: this
+            }
+        _modules.value = _modules.value.map { module ->
+            if (module.packageName == packageName) module.withOverride() else module
+        }
+        details[packageName]?.let { details[packageName] = it.withOverride() }
+    }
+
+    private fun applySourceOverride(module: RepoModule): RepoModule =
+        moduleState.sourceOverride(module.packageName)
+            ?.let { module.withSourceOverride(it) }
+            ?: module
+
+    fun clearReadmeCache(packageName: String) {
+        val prefix = readmePrefix(packageName)
+        File(context.filesDir, "readme-cache").listFiles()
+            ?.filter { it.name.startsWith("$prefix.") }
+            ?.forEach { it.delete() }
     }
 
     fun cachedModule(packageName: String): RepoModule? =
@@ -232,7 +271,12 @@ class RepoRepository(
             } else {
                 RepoJson.parseModules(raw)
             }
-            CachedRepo(modules.filterNot { it.hide }, file.lastModified())
+            val base = modules.filterNot { it.hide }
+            CachedRepo(
+                modules = base.map(::applySourceOverride),
+                savedAt = file.lastModified(),
+                rawModules = base,
+            )
         }.getOrNull()
     }
 
@@ -240,5 +284,9 @@ class RepoRepository(
         runCatching { cacheFile(source).writeText(rawJson) }
     }
 
-    private data class CachedRepo(val modules: List<RepoModule>, val savedAt: Long)
+    private data class CachedRepo(
+        val modules: List<RepoModule>,
+        val savedAt: Long,
+        val rawModules: List<RepoModule>,
+    )
 }

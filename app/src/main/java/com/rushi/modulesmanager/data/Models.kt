@@ -196,6 +196,29 @@ data class RepoModule(
         return null
     }
 
+    /** Replaces the index source with a repository the user chose. */
+    fun withSourceOverride(repoFullName: String): RepoModule {
+        val owner = repoFullName.substringBefore('/')
+        return copy(
+            sourceUrl = "https://github.com/$repoFullName",
+            repoFullName = repoFullName,
+            url = "https://github.com/$repoFullName/releases",
+            collaborators = listOf(RepoCollaborator(owner, null)),
+            readme = null,
+            readmeHtml = null,
+        )
+    }
+
+    /** Puts the index source back while keeping releases and versions already merged. */
+    fun withOriginalSource(original: RepoModule): RepoModule = copy(
+        sourceUrl = original.sourceUrl,
+        repoFullName = original.repoFullName,
+        url = original.url,
+        collaborators = original.collaborators,
+        readme = null,
+        readmeHtml = null,
+    )
+
     /** GitHub owner of the module, used for its avatar. */
     fun avatarUrl(): String? {
         val candidate = sourceUrl ?: url ?: homepageUrl ?: return null

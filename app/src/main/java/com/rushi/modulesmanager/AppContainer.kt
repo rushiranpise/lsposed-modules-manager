@@ -21,7 +21,7 @@ class AppContainer(context: Context) {
     val api = RepoApi(RepoApi.createClient())
     val liveApi = LiveReleaseApi(RepoApi.createClient())
     val readmeApi = ReadmeApi(RepoApi.createClient())
-    val repo = RepoRepository(appContext, api)
+    val repo = RepoRepository(appContext, api, moduleState)
     val scanner = InstalledModuleScanner(appContext)
     val downloads = DownloadCenter()
 }
