@@ -95,6 +95,7 @@ fun InstalledScreen(
     val preReleaseModules by viewModel.preReleaseModules.collectAsStateWithLifecycle()
     val skippedVersions by viewModel.skippedVersions.collectAsStateWithLifecycle()
     val moduleLinks by viewModel.moduleLinks.collectAsStateWithLifecycle()
+    val manualModules by viewModel.manualModules.collectAsStateWithLifecycle()
 
     var filter by rememberSaveable { mutableStateOf(InstalledFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -107,6 +108,7 @@ fun InstalledScreen(
     val updatesByPackage = remember(updates) { updates.associateBy { it.installed.packageName } }
     fun repoModuleFor(module: InstalledModule): RepoModule? =
         modulesByPackage[module.packageName]
+            ?: manualModules[module.packageName]
             ?: moduleLinks[module.packageName]?.let { modulesByPackage[it] }
 
     val notInRepoCount = remember(installed, modulesByPackage, moduleLinks) {
@@ -356,10 +358,10 @@ fun InstalledScreen(
 
     linkingModule?.let { module ->
         LinkModuleDialog(
-            modules = modules,
+            label = module.label,
             onDismiss = { linkingModule = null },
-            onSelect = { repo ->
-                viewModel.linkModule(module.packageName, repo)
+            onLink = { url ->
+                viewModel.linkModule(module.packageName, url)
                 linkingModule = null
             },
         )
@@ -368,57 +370,38 @@ fun InstalledScreen(
 
 @Composable
 private fun LinkModuleDialog(
-    modules: List<RepoModule>,
+    label: String,
     onDismiss: () -> Unit,
-    onSelect: (RepoModule) -> Unit,
+    onLink: (String) -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val filtered = remember(modules, query) {
-        val needle = query.trim().lowercase()
-        if (needle.isEmpty()) modules.take(100) else modules.filter {
-            it.displayName.lowercase().contains(needle) ||
-                it.packageName.lowercase().contains(needle)
-        }.take(100)
-    }
+    var repoUrl by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Link repository module") },
+        title = { Text("Link manually") },
         text = {
             Column {
                 Text(
-                    text = "Choose the repository entry for this installed package. Updates and releases will use it.",
+                    text = "Paste the GitHub repository for $label. Its releases will be used for updates.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("Search modules") },
+                    value = repoUrl,
+                    onValueChange = { repoUrl = it },
+                    placeholder = { Text("https://github.com/owner/repo") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(4.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(filtered, key = { it.packageName }) { repo ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(onClick = { onSelect(repo) }, onLongClick = {})
-                                .padding(vertical = 8.dp),
-                        ) {
-                            Text(repo.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                text = repo.packageName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
+            TextButton(
+                onClick = { onLink(repoUrl) },
+                enabled = repoUrl.isNotBlank(),
+            ) { Text("Link") }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
@@ -524,20 +507,20 @@ private fun InstalledCard(
                                     },
                                 )
                             }
-                            if (repoModule == null) {
+                            if (linked) {
                                 DropdownMenuItem(
-                                    text = { Text("Link to repository module") },
-                                    onClick = {
-                                        menuOpen = false
-                                        onLinkModule()
-                                    },
-                                )
-                            } else if (linked) {
-                                DropdownMenuItem(
-                                    text = { Text("Unlink repository module") },
+                                    text = { Text("Unlink manual repository") },
                                     onClick = {
                                         menuOpen = false
                                         onUnlinkModule()
+                                    },
+                                )
+                            } else if (repoModule == null) {
+                                DropdownMenuItem(
+                                    text = { Text("Link manually") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onLinkModule()
                                     },
                                 )
                             }

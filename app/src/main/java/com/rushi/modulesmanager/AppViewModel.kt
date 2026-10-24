@@ -203,6 +203,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
     val batchUpdate: StateFlow<BatchUpdateState?> = _batchUpdate.asStateFlow()
 
+    /** Synthetic modules for manual GitHub links, keyed by the installed package name. */
+    private val _manualModules = MutableStateFlow<Map<String, RepoModule>>(emptyMap())
+    val manualModules: StateFlow<Map<String, RepoModule>> = _manualModules.asStateFlow()
+    private val loadedManualLinks = mutableSetOf<String>()
+
     private var detailJob: Job? = null
     private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
@@ -221,8 +226,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         repoInstalled,
         channel,
         libraryState,
-    ) { repoModules, installedModules, selectedChannel, library ->
-        val byPackage = repoModules.associateBy { it.packageName }
+        manualModules,
+    ) { repoModules, installedModules, selectedChannel, library, manual ->
+        val byPackage = (repoModules + manual.values).associateBy { it.packageName }
         installedModules.mapNotNull { installedModule ->
             val module = byPackage[installedModule.packageName]
                 ?: library.links[installedModule.packageName]?.let { byPackage[it] }
@@ -271,6 +277,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
+            moduleLinks.collect { links -> refreshManualModules(links) }
+        }
+        viewModelScope.launch {
+            manualModules.collectLatest { rebuildRepoInstalled() }
+        }
+        viewModelScope.launch {
             combine(settings.autoTranslate, settings.translateLanguage, modules) { auto, language, list ->
                 Triple(auto, language, list)
             }.collect { (auto, language, list) ->
@@ -312,7 +324,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      */
     private fun rebuildRepoInstalled() {
         installedRebuildJob?.cancel()
-        val repoPackages = modules.value.map { it.packageName }
+        val repoPackages = (modules.value.map { it.packageName } +
+            container.moduleState.links.value.keys).distinct()
         val versions = installedVersionMap
         val detected = detectedModules.associateBy { it.packageName }
         if (versions.isEmpty()) {
@@ -543,11 +556,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         detailJob?.cancel()
         readmeTranslationJob?.cancel()
         _readmeTranslation.value = null
-        _detail.value = container.repo.cachedModule(packageName)
+        _detail.value = _manualModules.value[packageName]
+            ?: container.repo.cachedModule(packageName)
         _detailError.value = null
         _detailLoading.value = true
         detailJob = viewModelScope.launch {
-            val loaded = container.repo.loadModule(DefaultSources.official, packageName)
+            val loaded = loadDetailedModule(packageName)
             if (loaded != null) {
                 _detail.value = loaded
             } else if (_detail.value == null) {
@@ -717,15 +731,108 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         message(if (enabled) "Following pre-releases for ${module.displayName}" else "Following stable releases")
     }
 
-    /** Links a differently named installed package to a repository module. */
-    fun linkModule(installedPackage: String, repoModule: RepoModule) {
-        container.moduleState.linkModule(installedPackage, repoModule.packageName)
-        message("Linked to ${repoModule.displayName}")
+    /** Links an installed package to a GitHub repository entered by the user. */
+    fun linkModule(installedPackage: String, repoInput: String) {
+        val repo = parseGithubRepo(repoInput)
+        if (repo == null) {
+            message("Paste a GitHub URL like https://github.com/owner/repo")
+            return
+        }
+        container.moduleState.linkModule(installedPackage, repo)
+        loadedManualLinks.remove("$installedPackage|$repo")
+        viewModelScope.launch {
+            val module = loadManualModule(installedPackage, repo)
+            if (module == null) {
+                message("Could not load releases from $repo")
+            } else {
+                loadedManualLinks += "$installedPackage|$repo"
+                _manualModules.update { it + (installedPackage to module) }
+                message("Linked to $repo")
+            }
+        }
     }
 
     fun unlinkModule(installedPackage: String) {
         container.moduleState.unlinkModule(installedPackage)
-        message("Repository link removed")
+        loadedManualLinks.removeAll { it.startsWith("$installedPackage|") }
+        _manualModules.update { it - installedPackage }
+        message("Manual link removed")
+    }
+
+    private suspend fun refreshManualModules(links: Map<String, String>) {
+        _manualModules.update { current -> current.filterKeys { it in links } }
+        for ((packageName, repo) in links) {
+            val key = "$packageName|$repo"
+            if (key in loadedManualLinks) continue
+            val module = loadManualModule(packageName, repo) ?: continue
+            loadedManualLinks += key
+            _manualModules.update { it + (packageName to module) }
+        }
+    }
+
+    /** Builds a module from a GitHub repository's releases for a manually linked package. */
+    private suspend fun loadManualModule(packageName: String, repoFullName: String): RepoModule? =
+        runCatching {
+            val releases = container.liveApi.fetchAll(repoFullName).orEmpty()
+            if (releases.isEmpty()) return@runCatching null
+            val mapped = releases.map { it.toRepoRelease() }
+            val stable = mapped.filter { !it.isPrerelease && !it.isSnapshot }
+            val beta = mapped.filter { it.isPrerelease && !it.isSnapshot }
+            val snapshots = mapped.filter { it.isSnapshot }
+            val latest = stable.firstOrNull()
+            RepoModule(
+                packageName = packageName,
+                displayName = repoFullName.substringAfter('/'),
+                summary = null,
+                url = "https://github.com/$repoFullName",
+                homepageUrl = null,
+                sourceUrl = "https://github.com/$repoFullName",
+                latestRelease = latest?.tagName,
+                latestReleaseTime = latest?.publishedAt,
+                latestBetaRelease = beta.firstOrNull()?.tagName,
+                latestBetaReleaseTime = beta.firstOrNull()?.publishedAt,
+                latestSnapshotRelease = snapshots.firstOrNull()?.tagName,
+                latestSnapshotReleaseTime = snapshots.firstOrNull()?.publishedAt,
+                releases = stable,
+                betaReleases = beta,
+                snapshotReleases = snapshots,
+                readme = null,
+                readmeHtml = null,
+                collaborators = emptyList(),
+                scope = emptyList(),
+                hide = false,
+                updatedAt = latest?.publishedAt,
+                stargazerCount = 0,
+                repoFullName = repoFullName,
+                releaseHistory = mapped,
+            )
+        }.getOrNull()
+
+    private fun parseGithubRepo(input: String): String? {
+        val value = input.trim()
+        if (value.isEmpty()) return null
+        val urlMatch = Regex(
+            """(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)""",
+            RegexOption.IGNORE_CASE,
+        ).find(value)
+        val shortMatch = Regex("""^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$""").find(value)
+        val match = urlMatch ?: shortMatch ?: return null
+        val owner = match.groupValues[1].trim()
+        val repo = match.groupValues[2].trim().removeSuffix(".git")
+        return if (owner.isBlank() || repo.isBlank()) null else "$owner/$repo"
+    }
+
+    /** Manual links need their releases fetched before the detail page can show them. */
+    private suspend fun loadDetailedModule(packageName: String): RepoModule? {
+        _manualModules.value[packageName]?.let { return it }
+        val linkedRepo = container.moduleState.links.value[packageName]
+        if (linkedRepo != null) {
+            val module = loadManualModule(packageName, linkedRepo) ?: return null
+            loadedManualLinks += "$packageName|$linkedRepo"
+            _manualModules.update { it + (packageName to module) }
+            return module
+        }
+        return container.repo.loadModule(DefaultSources.official, packageName)
     }
 
     private fun includePreReleases(module: RepoModule): Boolean =
@@ -1074,7 +1181,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Resolves the newest APK for an installed module and starts installing it. */
     fun installLatest(module: RepoModule) {
         viewModelScope.launch {
-            val detailed = container.repo.loadModule(DefaultSources.official, module.packageName) ?: module
+            val detailed = loadDetailedModule(module.packageName) ?: module
             val includePreRelease = includePreReleases(detailed)
             val latest = detailed.latestFor(includePreRelease)
             val release = if (latest != null) {
