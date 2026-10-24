@@ -480,22 +480,6 @@ private fun InstalledCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    if (update != null) {
-                        Spacer(Modifier.width(8.dp))
-                        FilledTonalButton(
-                            onClick = { onUpdate(update) },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            modifier = Modifier.height(34.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Install", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
                     Box {
                         IconButton(
                             onClick = { menuOpen = true },
@@ -620,6 +604,22 @@ private fun InstalledCard(
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                         else -> StatusPill(text = "Not in repository")
+                    }
+                    if (update != null) {
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = { onUpdate(update) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Install", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
