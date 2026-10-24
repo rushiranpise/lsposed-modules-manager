@@ -1,7 +1,7 @@
 package com.rushi.modulesmanager.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
  * Translation through Google's public web endpoint. No API key or account is needed, but the
  * text leaves the device, the endpoint is unofficial and it is rate limited, so requests are
  * batched. Every answer carries the detected source language, which replaces a separate
- * on-device language identifier.
+ * on-device language identifier. The same batch API answers on a few Google hosts, so a blocked
+ * or failing host falls through to the next one.
  */
 object TranslateApi {
     data class Result(val text: String, val sourceLanguage: String?)
@@ -58,38 +59,32 @@ object TranslateApi {
         val body = FormBody.Builder().apply {
             texts.forEach { add("q", it) }
         }.build()
-        val url = "$ENDPOINT?client=dict-chrome-ex&sl=auto&tl=$target"
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", RepoApi.USER_AGENT)
-            .post(body)
-            .build()
 
         var lastError: Exception? = null
-        repeat(2) { attempt ->
+        for (host in HOSTS) {
             try {
+                val request = Request.Builder()
+                    .url("https://$host/translate_a/t?client=dict-chrome-ex&sl=auto&tl=$target")
+                    .header("User-Agent", RepoApi.USER_AGENT)
+                    .post(body)
+                    .build()
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        val error = IOException(
+                        throw IOException(
                             if (response.code == 429) {
                                 "Google Translate is rate limiting requests, try again later"
                             } else {
                                 "Translation failed (HTTP ${response.code})"
                             },
                         )
-                        if (response.code == 429 || response.code >= 500) {
-                            lastError = error
-                        } else {
-                            throw error
-                        }
-                    } else {
-                        return parse(response.body?.string().orEmpty(), texts.size)
                     }
+                    return parse(response.body?.string().orEmpty(), texts.size)
                 }
-            } catch (e: IOException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 lastError = e
             }
-            if (attempt == 0) delay(1200)
         }
         throw lastError ?: IOException("Translation failed")
     }
@@ -142,7 +137,12 @@ object TranslateApi {
             .build()
     }
 
-    private const val ENDPOINT = "https://clients5.google.com/translate_a/t"
+    /** Tried in order; every one serves the same batch response. */
+    private val HOSTS = listOf(
+        "clients5.google.com",
+        "translate.googleapis.com",
+        "translate.google.com",
+    )
     private const val MAX_BATCH_ITEMS = 20
     private const val MAX_BATCH_CHARS = 6000
 }

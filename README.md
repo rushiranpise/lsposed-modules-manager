@@ -25,7 +25,7 @@ Translation goes through Google's public translate endpoint, so no API key or ac
 
 - **Translate automatically** in Settings translates module descriptions when the list loads and the README when a module is opened.
 - **Language** picks the target language, or keeps the device language.
-- Requests are batched, and translations are cached per language.
+- Requests are batched, Google hosts are tried in turn if one fails, and translations are cached per language.
 - README translation rewrites only prose. Links, images, code blocks and inline code keep their exact syntax.
 - Rows whose description is already in the target language hide the translate icon.
 
