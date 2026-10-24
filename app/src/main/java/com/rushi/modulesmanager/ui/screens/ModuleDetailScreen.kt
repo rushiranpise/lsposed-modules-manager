@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -432,16 +431,18 @@ private fun DetailHeader(
             shape = RoundedCornerShape(28.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(
-                imageVector = when {
-                    !isInstalled || hasUpdate -> Icons.Outlined.Download
-                    installedHasLauncher -> Icons.Outlined.PlayArrow
-                    else -> Icons.Outlined.Info
-                },
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
+            if (!isInstalled || hasUpdate || !installedHasLauncher) {
+                Icon(
+                    imageVector = if (!isInstalled || hasUpdate) {
+                        Icons.Outlined.Download
+                    } else {
+                        Icons.Outlined.Info
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text(primaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
