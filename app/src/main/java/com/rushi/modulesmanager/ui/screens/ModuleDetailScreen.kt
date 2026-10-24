@@ -34,15 +34,12 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -114,7 +111,6 @@ fun ModuleDetailScreen(
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOriginalReadme by rememberSaveable(packageName) { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
     var pendingRelease by remember { mutableStateOf<RepoRelease?>(null) }
 
     val context = LocalContext.current
@@ -189,30 +185,19 @@ fun ModuleDetailScreen(
                             }
                         }
                     }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Outlined.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            module?.url?.let { url ->
-                                DropdownMenuItem(
-                                    text = { Text("Open release page") },
-                                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
-                                    onClick = {
-                                        viewModel.openLink(url)
-                                        showMenu = false
-                                    },
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Copy package name") },
-                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
-                                onClick = {
-                                    copyToClipboard(context, packageName)
-                                    showMenu = false
-                                },
+                    module?.url?.let { url ->
+                        IconButton(onClick = { viewModel.openLink(url) }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                                contentDescription = "Open release page",
                             )
                         }
+                    }
+                    IconButton(onClick = { copyToClipboard(context, packageName) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = "Copy package name",
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
