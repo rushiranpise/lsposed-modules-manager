@@ -111,34 +111,43 @@ fun InstalledScreen(
             ?: manualModules[module.packageName]
             ?: moduleLinks[module.packageName]?.let { modulesByPackage[it] }
 
-    val notInRepoCount = remember(installed, modulesByPackage, moduleLinks) {
-        installed.count { repoModuleFor(it) == null }
+    // Chip counts follow the search, so they describe the results the user is looking at.
+    val searched = remember(installed, query) {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) {
+            installed
+        } else {
+            installed.filter { module ->
+                module.label.lowercase().contains(needle) ||
+                    module.packageName.lowercase().contains(needle)
+            }
+        }
     }
-    val upToDateCount = remember(installed, updatesByPackage, modulesByPackage, moduleLinks) {
-        installed.count { repoModuleFor(it) != null && !updatesByPackage.containsKey(it.packageName) }
+    val notInRepoCount = remember(searched, modulesByPackage, moduleLinks) {
+        searched.count { repoModuleFor(it) == null }
+    }
+    val upToDateCount = remember(searched, updatesByPackage, modulesByPackage, moduleLinks) {
+        searched.count { repoModuleFor(it) != null && !updatesByPackage.containsKey(it.packageName) }
+    }
+    val updatesInSearch = remember(searched, updatesByPackage) {
+        searched.count { updatesByPackage.containsKey(it.packageName) }
     }
     val visible = remember(
-        installed,
+        searched,
         updatesByPackage,
         modulesByPackage,
         moduleLinks,
         filter,
-        query,
     ) {
-        val needle = query.trim().lowercase()
-        installed.filter { module ->
+        searched.filter { module ->
             val inRepo = repoModuleFor(module) != null
-            val matchesFilter = when (filter) {
+            when (filter) {
                 InstalledFilter.ALL -> true
                 InstalledFilter.UPDATES -> updatesByPackage.containsKey(module.packageName)
                 InstalledFilter.UP_TO_DATE ->
                     inRepo && !updatesByPackage.containsKey(module.packageName)
                 InstalledFilter.NOT_IN_REPO -> !inRepo
             }
-            val matchesQuery = needle.isEmpty() ||
-                module.label.lowercase().contains(needle) ||
-                module.packageName.lowercase().contains(needle)
-            matchesFilter && matchesQuery
         }.sortedWith(
             compareBy<InstalledModule> { if (updatesByPackage.containsKey(it.packageName)) 0 else 1 }
                 .thenBy { it.label.lowercase() },
@@ -192,13 +201,13 @@ fun InstalledScreen(
                     selected = filter == InstalledFilter.ALL,
                     onClick = { filter = InstalledFilter.ALL },
                     label = "All",
-                    count = installed.size,
+                    count = searched.size,
                 )
                 CountedFilterChip(
                     selected = filter == InstalledFilter.UPDATES,
                     onClick = { filter = InstalledFilter.UPDATES },
                     label = "Updates",
-                    count = updates.size,
+                    count = updatesInSearch,
                 )
                 CountedFilterChip(
                     selected = filter == InstalledFilter.UP_TO_DATE,

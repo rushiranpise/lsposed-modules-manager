@@ -114,27 +114,35 @@ fun RepoListScreen(
 
     val installedByPackage = installedVersions
     val updatesByPackage = remember(updates) { updates.associateBy { it.installed.packageName } }
-    val installedInRepo = remember(modules, installedByPackage) {
-        modules.count { installedByPackage.containsKey(it.packageName) }
+    // Chip counts follow the search, so they describe the results the user is looking at.
+    val searched = remember(modules, query) {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) {
+            modules
+        } else {
+            modules.filter { module ->
+                module.displayName.lowercase().contains(needle) ||
+                    module.packageName.lowercase().contains(needle) ||
+                    module.summary?.lowercase()?.contains(needle) == true
+            }
+        }
     }
-    val notInstalledInRepo = modules.size - installedInRepo
+    val installedInRepo = remember(searched, installedByPackage) {
+        searched.count { installedByPackage.containsKey(it.packageName) }
+    }
+    val updatesInSearch = remember(searched, updatesByPackage) {
+        searched.count { updatesByPackage.containsKey(it.packageName) }
+    }
+    val notInstalledInRepo = searched.size - installedInRepo
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    val filtered = remember(modules, query, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
-        val needle = query.trim().lowercase()
-        val matched = modules.filter { module ->
-            val matchesFilter = when (filter) {
-                RepoFilter.ALL -> true
-                RepoFilter.UPDATES -> updatesByPackage.containsKey(module.packageName)
-                RepoFilter.INSTALLED -> installedByPackage.containsKey(module.packageName)
-                RepoFilter.NOT_INSTALLED -> !installedByPackage.containsKey(module.packageName)
-            }
-            if (!matchesFilter) return@filter false
-            needle.isEmpty() ||
-                module.displayName.lowercase().contains(needle) ||
-                module.packageName.lowercase().contains(needle) ||
-                module.summary?.lowercase()?.contains(needle) == true
+    val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
+        val matched = when (filter) {
+            RepoFilter.ALL -> searched
+            RepoFilter.UPDATES -> searched.filter { updatesByPackage.containsKey(it.packageName) }
+            RepoFilter.INSTALLED -> searched.filter { installedByPackage.containsKey(it.packageName) }
+            RepoFilter.NOT_INSTALLED -> searched.filter { !installedByPackage.containsKey(it.packageName) }
         }
         matched.sortedWith(
             compareBy<RepoModule> {
@@ -255,13 +263,13 @@ fun RepoListScreen(
                     selected = filter == RepoFilter.ALL,
                     onClick = { filter = RepoFilter.ALL },
                     label = "All",
-                    count = modules.size,
+                    count = searched.size,
                 )
                 CountedFilterChip(
                     selected = filter == RepoFilter.UPDATES,
                     onClick = { filter = RepoFilter.UPDATES },
                     label = "Updates",
-                    count = updates.size,
+                    count = updatesInSearch,
                 )
                 CountedFilterChip(
                     selected = filter == RepoFilter.INSTALLED,
