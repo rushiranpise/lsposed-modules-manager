@@ -111,6 +111,24 @@ class LiveReleaseApiTest {
         )
     }
 
+    @Test
+    fun `falls back to the feed for the latest release`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.enqueue(MockResponse().setBody(ATOM_FEED))
+        server.enqueue(MockResponse().setBody(ATOM_ASSETS))
+
+        val release = api().fetchLatest("example/module")
+
+        assertEquals("1.0", release?.tag)
+        assertEquals("module-1.0.apk", release?.assets?.single()?.name)
+        assertEquals("/repos/example/module/releases/latest", server.takeRequest().path)
+        assertEquals("/example/module/releases.atom", server.takeRequest().path)
+        assertEquals(
+            "/example/module/releases/expanded_assets/1.0",
+            server.takeRequest().path,
+        )
+    }
+
     private companion object {
         val ATOM_FEED = """
             <?xml version="1.0" encoding="UTF-8"?>

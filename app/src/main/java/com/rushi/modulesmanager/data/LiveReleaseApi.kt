@@ -43,7 +43,13 @@ class LiveReleaseApi(
     /** ETag per repository, so unchanged releases return 304 and do not consume the rate limit. */
     private val etags = ConcurrentHashMap<String, String>()
 
-    suspend fun fetchLatest(repoFullName: String): LiveRelease? = withContext(Dispatchers.IO) {
+    suspend fun fetchLatest(repoFullName: String): LiveRelease? = try {
+        fetchLatestFromApi(repoFullName)
+    } catch (e: LiveUpdateRateLimitException) {
+        fetchLatestFromAtom(repoFullName) ?: throw e
+    }
+
+    private suspend fun fetchLatestFromApi(repoFullName: String): LiveRelease? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${apiBase.trimEnd('/')}/repos/$repoFullName/releases/latest")
             .header("User-Agent", RepoApi.USER_AGENT)
@@ -143,6 +149,23 @@ class LiveReleaseApi(
      */
     private suspend fun fetchAllFromAtom(repoFullName: String): List<LiveRelease>? =
         withContext(Dispatchers.IO) {
+            val releases = fetchAtomFeed(repoFullName) ?: return@withContext null
+            releases.map { release ->
+                release.copy(assets = fetchAtomAssets(repoFullName, release.tag))
+            }
+        }
+
+    private suspend fun fetchLatestFromAtom(repoFullName: String): LiveRelease? =
+        withContext(Dispatchers.IO) {
+            val releases = fetchAtomFeed(repoFullName) ?: return@withContext null
+            val latest = releases.firstOrNull { !it.isPrerelease } ?: return@withContext null
+            val assets = fetchAtomAssets(repoFullName, latest.tag)
+            if (assets.isEmpty()) return@withContext null
+            latest.copy(assets = assets)
+        }
+
+    private suspend fun fetchAtomFeed(repoFullName: String): List<LiveRelease>? =
+        withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url("${webBase.trimEnd('/')}/$repoFullName/releases.atom")
                 .header("User-Agent", RepoApi.USER_AGENT)
@@ -154,12 +177,7 @@ class LiveReleaseApi(
                     response.body?.string()
                 }
             }.getOrNull() ?: return@withContext null
-
-            val releases = parseAtomEntries(xml)
-            if (releases.isEmpty()) return@withContext null
-            releases.map { release ->
-                release.copy(assets = fetchAtomAssets(repoFullName, release.tag))
-            }
+            parseAtomEntries(xml).takeIf { it.isNotEmpty() }
         }
 
     private fun parseAtomEntries(xml: String): List<LiveRelease> =
