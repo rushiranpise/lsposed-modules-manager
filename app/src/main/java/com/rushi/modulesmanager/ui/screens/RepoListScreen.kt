@@ -140,10 +140,14 @@ fun RepoListScreen(
             compareBy<RepoModule> {
                 if (updatesFirst && updatesByPackage.containsKey(it.packageName)) 0 else 1
             }.then(
-                if (sortMode == SortMode.NAME) {
-                    compareBy { it.displayName.lowercase() }
-                } else {
-                    compareByDescending { parseInstant(it.latestTime(channel)) ?: Instant.EPOCH }
+                when (sortMode) {
+                    SortMode.NAME -> compareBy<RepoModule> { it.displayName.lowercase() }
+                    SortMode.ADDED -> compareByDescending<RepoModule> {
+                        parseInstant(it.addedAt) ?: Instant.EPOCH
+                    }.thenBy { it.displayName.lowercase() }
+                    SortMode.UPDATED -> compareByDescending<RepoModule> {
+                        parseInstant(it.latestTime(channel)) ?: Instant.EPOCH
+                    }
                 },
             ),
         )
@@ -185,6 +189,16 @@ fun RepoListScreen(
                                     },
                                     onClick = {
                                         viewModel.setSortMode(SortMode.UPDATED)
+                                        showSortMenu = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sort by recently added") },
+                                    leadingIcon = {
+                                        if (sortMode == SortMode.ADDED) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                    },
+                                    onClick = {
+                                        viewModel.setSortMode(SortMode.ADDED)
                                         showSortMenu = false
                                     },
                                 )

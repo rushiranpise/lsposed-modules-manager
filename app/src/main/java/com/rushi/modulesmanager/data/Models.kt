@@ -22,7 +22,8 @@ enum class UpdateChannel(val key: String, val label: String, val description: St
 
 enum class SortMode(val key: String, val label: String) {
     NAME("name", "Name"),
-    UPDATED("updated", "Last updated");
+    UPDATED("updated", "Last updated"),
+    ADDED("added", "Recently added");
 
     companion object {
         fun fromKey(key: String?): SortMode = entries.firstOrNull { it.key == key } ?: UPDATED
@@ -95,6 +96,8 @@ data class RepoModule(
     val hide: Boolean,
     val updatedAt: String?,
     val stargazerCount: Int,
+    /** When the daily index first saw this module. */
+    val addedAt: String? = null,
     /** GitHub repo that hosts releases, used for live update checks. */
     val repoFullName: String? = null,
     /** Full release list fetched for the Releases tab. */
@@ -394,6 +397,7 @@ object RepoJson {
             hide = false,
             updatedAt = obj.optString("pushed_at").takeIf { it.isNotBlank() && it != "null" } ?: publishedAt,
             stargazerCount = obj.optInt("stargazers_count", 0),
+            addedAt = obj.optString("added_at").takeIf { it.isNotBlank() && it != "null" },
             repoFullName = orgRepo.takeIf { it.isNotBlank() && it != "null" } ?: fullName,
         )
     }
