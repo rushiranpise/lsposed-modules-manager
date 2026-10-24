@@ -471,14 +471,10 @@ private fun ModuleCard(
         Row(modifier = Modifier.padding(14.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ModuleAvatar(module, size = 54.dp)
-                if (module.stargazerCount > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    StarBadge(module.stargazerCount)
-                }
-                if (module.forkCount > 0) {
-                    Spacer(Modifier.height(4.dp))
-                    ForkBadge(module.forkCount)
-                }
+                Spacer(Modifier.height(6.dp))
+                StarBadge(module.stargazerCount)
+                Spacer(Modifier.height(4.dp))
+                ForkBadge(module.forkCount)
             }
             Spacer(Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f)) {

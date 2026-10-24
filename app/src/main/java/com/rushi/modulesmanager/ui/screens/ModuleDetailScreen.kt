@@ -359,21 +359,19 @@ private fun DetailHeader(
                 )
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
-                if (latestLabel.isNotBlank() || module.stargazerCount > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (module.stargazerCount > 0) StarBadge(module.stargazerCount)
-                        if (latestLabel.isNotBlank()) {
-                            Text(
-                                text = latestLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (latestDate != null) StatusPill(text = latestDate)
-                        }
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StarBadge(module.stargazerCount)
+                    if (latestLabel.isNotBlank()) {
+                        Text(
+                            text = latestLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (latestDate != null) StatusPill(text = latestDate)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -727,12 +725,8 @@ private fun InformationTab(
                 value = module.collaborators.joinToString(", ") { it.name ?: it.login },
             )
         }
-        if (module.stargazerCount > 0) {
-            InfoRow("Stars", module.stargazerCount.toString())
-        }
-        if (module.forkCount > 0) {
-            InfoRow("Forks", module.forkCount.toString())
-        }
+        InfoRow("Stars", module.stargazerCount.toString())
+        InfoRow("Forks", module.forkCount.toString())
         if (module.scope.isNotEmpty()) {
             InfoRow(
                 title = "Target apps",
