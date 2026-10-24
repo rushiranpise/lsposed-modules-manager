@@ -1,6 +1,7 @@
 package com.rushi.modulesmanager.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ApkVariantsTest {
@@ -45,6 +46,61 @@ class ApkVariantsTest {
         )
 
         assertEquals(listOf(normal), choices)
+    }
+
+    @Test
+    fun `a remembered variant is found in a later release`() {
+        val first = listOf(
+            asset("OS2_HyperCeiler-2.10.166-20260402-release.apk"),
+            asset("OS3_HyperCeiler-2.10.166-20260331-release.apk"),
+        )
+        val next = listOf(
+            asset("OS3_HyperCeiler-3.0.0-20270101-release.apk"),
+            asset("OS2_HyperCeiler-3.0.0-20270102-release.apk"),
+        )
+
+        val preference = ApkVariants.preference(first[0])
+        val match = ApkVariants.match(
+            preference,
+            next,
+            sdk = 35,
+            deviceAbis = listOf("arm64-v8a"),
+        )
+
+        assertEquals(next[1], match)
+    }
+
+    @Test
+    fun `traits recover the variant after a rename`() {
+        val preference = ApkVariants.preference(asset("old-arm64-v8a.apk"))
+        val next = listOf(
+            asset("renamed-v2-x86_64.apk"),
+            asset("renamed-v2-arm64-v8a.apk"),
+        )
+
+        val match = ApkVariants.match(
+            preference,
+            next,
+            sdk = 35,
+            deviceAbis = listOf("arm64-v8a"),
+        )
+
+        assertEquals(next[1], match)
+    }
+
+    @Test
+    fun `an ambiguous release is not preselected`() {
+        val preference = ApkVariants.preference(asset("app.apk"))
+        val next = listOf(asset("build.apk"), asset("other.apk"))
+
+        assertNull(ApkVariants.match(preference, next, sdk = 35, deviceAbis = listOf("arm64-v8a")))
+    }
+
+    @Test
+    fun `a preference round trips through storage`() {
+        val preference = ApkVariants.preference(asset("app-arm64-v8a.apk"))
+
+        assertEquals(preference, ApkVariants.decode(ApkVariants.encode(preference)))
     }
 
     private fun asset(name: String) = RepoAsset(

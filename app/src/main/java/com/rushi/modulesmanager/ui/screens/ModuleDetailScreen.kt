@@ -264,7 +264,7 @@ fun ModuleDetailScreen(
                         module = module,
                         loading = loading,
                         onInstall = { asset ->
-                            viewModel.install(module, asset)
+                            viewModel.installChosen(module, asset)
                         },
                         onOpenRelease = viewModel::openLink,
                     )

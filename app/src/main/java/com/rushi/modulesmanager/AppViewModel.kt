@@ -1250,7 +1250,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     if (release == null || !release.matchesVersion(latest)) {
                                         throw IllegalStateException("Repository is serving an older release")
                                     }
-                                    val asset = release.preferredAsset()
+                                    val remembered = container.moduleState.variantFor(packageName)
+                                        ?.let(ApkVariants::decode)
+                                        ?.let { ApkVariants.match(it, release.apkAssets) }
+                                    val asset = remembered ?: release.preferredAsset()
                                         ?: throw IllegalStateException("No APK asset")
                                     updateBatchItem(packageName) { it.copy(total = asset.size) }
                                     val file = downloadApk(
@@ -1395,8 +1398,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Installs the release, asking which APK when several fit the device equally well. */
+    /** Installs the release, using the remembered variant before asking again. */
     fun installRelease(module: RepoModule, release: RepoRelease?) {
+        val remembered = container.moduleState.variantFor(module.packageName)
+            ?.let(ApkVariants::decode)
+            ?.let { ApkVariants.match(it, release?.apkAssets.orEmpty()) }
+        if (remembered != null) {
+            install(module, remembered)
+            return
+        }
         val options = release?.let { ApkVariants.bestChoices(it.apkAssets) }.orEmpty()
         when {
             options.size > 1 && release != null -> {
@@ -1416,8 +1426,22 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun installVariant(asset: RepoAsset) {
         val choice = _variantChoice.value ?: return
+        rememberVariant(choice.module.packageName, asset)
         _variantChoice.value = null
         install(choice.module, asset)
+    }
+
+    /** Installs an APK the user picked from a release list and remembers that choice. */
+    fun installChosen(module: RepoModule, asset: RepoAsset) {
+        rememberVariant(module.packageName, asset)
+        install(module, asset)
+    }
+
+    private fun rememberVariant(packageName: String, asset: RepoAsset) {
+        container.moduleState.rememberVariant(
+            packageName,
+            ApkVariants.encode(ApkVariants.preference(asset)),
+        )
     }
 
     fun cancelVariantChoice() {

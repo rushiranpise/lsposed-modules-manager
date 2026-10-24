@@ -1,6 +1,8 @@
 package com.rushi.modulesmanager.data
 
 import android.os.Build
+import org.json.JSONObject
+import java.util.Locale
 
 /**
  * Picks the APK inside a release that fits this device. Release assets carry their variant in
@@ -30,6 +32,13 @@ object ApkVariants {
         val minSdk: Int?,
         val debug: Boolean,
         val bundled: Boolean,
+    )
+
+    /** A remembered variant, independent of one release's file name. */
+    data class Preference(
+        val name: String,
+        val traits: String,
+        val flavor: String,
     )
 
     fun traits(asset: RepoAsset): Trait {
@@ -77,6 +86,78 @@ object ApkVariants {
         sdk: Int = Build.VERSION.SDK_INT,
         deviceAbis: List<String> = Build.SUPPORTED_ABIS.toList(),
     ): RepoAsset? = bestChoices(assets, sdk, deviceAbis).firstOrNull()
+
+    fun preference(asset: RepoAsset): Preference {
+        val trait = traits(asset)
+        return Preference(
+            name = asset.name,
+            traits = traitKey(trait),
+            flavor = flavor(asset.name),
+        )
+    }
+
+    /** Finds the remembered variant in another release, or null when it cannot be identified. */
+    fun match(
+        preference: Preference,
+        assets: List<RepoAsset>,
+        sdk: Int = Build.VERSION.SDK_INT,
+        deviceAbis: List<String> = Build.SUPPORTED_ABIS.toList(),
+    ): RepoAsset? {
+        val usable = assets.filter { asset ->
+            val trait = traits(asset)
+            score(trait, sdk, deviceAbis) >= 0 && !trait.bundled
+        }
+        if (usable.isEmpty()) return null
+        usable.firstOrNull { it.name == preference.name }?.let { return it }
+        usable.firstOrNull { it.name.equals(preference.name, ignoreCase = true) }?.let { return it }
+
+        val sameFlavor = if (preference.flavor.isNotEmpty()) {
+            usable.filter { flavor(it.name) == preference.flavor }
+        } else {
+            emptyList()
+        }
+        val sameTraits = usable.filter { traitKey(traits(it)) == preference.traits }
+        (sameFlavor.filter { traitKey(traits(it)) == preference.traits })
+            .takeIf { it.size == 1 }
+            ?.firstOrNull()
+            ?.let { return it }
+        sameFlavor.takeIf { it.size == 1 }?.firstOrNull()?.let { return it }
+        sameTraits.takeIf { it.size == 1 }?.firstOrNull()?.let { return it }
+        return null
+    }
+
+    fun encode(preference: Preference): String = JSONObject().apply {
+        put("name", preference.name)
+        put("traits", preference.traits)
+        put("flavor", preference.flavor)
+    }.toString()
+
+    fun decode(value: String?): Preference? = runCatching {
+        val obj = JSONObject(value ?: return null)
+        Preference(
+            name = obj.optString("name"),
+            traits = obj.optString("traits"),
+            flavor = obj.optString("flavor"),
+        ).takeIf { it.name.isNotBlank() }
+    }.getOrNull()
+
+    private fun traitKey(trait: Trait): String = buildString {
+        append(trait.abis.sorted().joinToString(","))
+        append('|')
+        append(trait.minSdk ?: "")
+        append('|')
+        if (trait.universal) append('u')
+        if (trait.debug) append('d')
+    }
+
+    /** The file name with version and build numbers removed, such as "os2_module_release". */
+    private fun flavor(name: String): String = name
+        .substringBeforeLast('.')
+        .lowercase(Locale.ROOT)
+        .split(Regex("[^a-z0-9]+"))
+        .filter { it.isNotEmpty() && !it.all(Char::isDigit) }
+        .joinToString("_")
+
 
     private fun score(trait: Trait, sdk: Int, deviceAbis: List<String>): Int {
         if (trait.minSdk != null && trait.minSdk > sdk) return -1

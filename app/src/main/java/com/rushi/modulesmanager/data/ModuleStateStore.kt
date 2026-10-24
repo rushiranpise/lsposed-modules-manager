@@ -27,6 +27,9 @@ class ModuleStateStore(context: Context) {
     private val _links = MutableStateFlow(readMap(KEY_LINKS))
     val links: StateFlow<Map<String, String>> = _links.asStateFlow()
 
+    /** The APK variant picked for a package, so later releases do not ask again. */
+    private val _variants = MutableStateFlow(readMap(KEY_VARIANTS))
+
     fun skipVersion(packageName: String, raw: String) {
         val updated = _skipped.value + (packageName to raw)
         _skipped.value = updated
@@ -67,6 +70,14 @@ class ModuleStateStore(context: Context) {
         writeMap(KEY_LINKS, updated)
     }
 
+    fun variantFor(packageName: String): String? = _variants.value[packageName]
+
+    fun rememberVariant(packageName: String, value: String) {
+        val updated = _variants.value + (packageName to value)
+        _variants.value = updated
+        writeMap(KEY_VARIANTS, updated)
+    }
+
     private fun readMap(key: String): Map<String, String> =
         prefs.getString(key, null)
             ?.lineSequence()
@@ -99,5 +110,6 @@ class ModuleStateStore(context: Context) {
         const val KEY_IGNORED = "ignored_updates"
         const val KEY_PRE_RELEASE = "pre_release_modules"
         const val KEY_LINKS = "module_links"
+        const val KEY_VARIANTS = "module_variants"
     }
 }

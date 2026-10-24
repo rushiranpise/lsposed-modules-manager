@@ -15,7 +15,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - The Releases tab lists every published release, stable and pre-release, with their APKs.
 - Translate module descriptions and READMEs, manually or automatically.
 - Install with the system installer, a PackageInstaller session, Shizuku, or root for silent installs. Installs handed to an external installer are remembered and confirmed on the next scan.
-- When a release ships several equally suitable APKs, a chooser asks which one to install.
+- When a release ships several equally suitable APKs, a chooser asks which one to install and remembers the choice for later releases.
 - Long press an installed module to uninstall it.
 - The Installed tab lists every installed module, including ones missing from the index.
 - Light, dark and system themes, Material You colors, AMOLED black and GitHub-style identicons.
