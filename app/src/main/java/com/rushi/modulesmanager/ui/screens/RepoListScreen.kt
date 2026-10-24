@@ -77,6 +77,7 @@ import com.rushi.modulesmanager.ui.components.HeaderDivider
 import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
+import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
@@ -153,6 +154,8 @@ fun RepoListScreen(
                     SortMode.ADDED -> compareByDescending<RepoModule> {
                         parseInstant(it.addedAt) ?: Instant.EPOCH
                     }.thenBy { it.displayName.lowercase() }
+                    SortMode.STARS -> compareByDescending<RepoModule> { it.stargazerCount }
+                        .thenBy { it.displayName.lowercase() }
                     SortMode.UPDATED -> compareByDescending<RepoModule> {
                         parseInstant(it.latestTime(channel)) ?: Instant.EPOCH
                     }
@@ -207,6 +210,16 @@ fun RepoListScreen(
                                     },
                                     onClick = {
                                         viewModel.setSortMode(SortMode.ADDED)
+                                        showSortMenu = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sort by stars") },
+                                    leadingIcon = {
+                                        if (sortMode == SortMode.STARS) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                    },
+                                    onClick = {
+                                        viewModel.setSortMode(SortMode.STARS)
                                         showSortMenu = false
                                     },
                                 )
@@ -455,7 +468,13 @@ private fun ModuleCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(14.dp)) {
-            ModuleAvatar(module, size = 54.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                ModuleAvatar(module, size = 54.dp)
+                if (module.stargazerCount > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    StarBadge(module.stargazerCount)
+                }
+            }
             Spacer(Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

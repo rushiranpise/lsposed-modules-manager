@@ -90,6 +90,7 @@ import com.rushi.modulesmanager.ui.components.EmptyState
 import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
+import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.shortVersion
 
@@ -358,18 +359,21 @@ private fun DetailHeader(
                 )
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
-                if (latestLabel.isNotBlank()) {
+                if (latestLabel.isNotBlank() || module.stargazerCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = latestLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (latestDate != null) StatusPill(text = latestDate)
+                        if (module.stargazerCount > 0) StarBadge(module.stargazerCount)
+                        if (latestLabel.isNotBlank()) {
+                            Text(
+                                text = latestLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (latestDate != null) StatusPill(text = latestDate)
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

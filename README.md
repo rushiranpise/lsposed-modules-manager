@@ -9,7 +9,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 ## Features
 
 - Browse over 2,000 module repositories from the daily [xposed-modules index](https://github.com/rushiranpise/xposed-modules).
-- Search, sort by name, last update or recently added, and filter by updates, installed or not installed.
+- Search, sort by name, last update, stars or recently added, and filter by updates, installed or not installed.
 - See the installed version next to an available update.
 - Open a module to read its README, its full GitHub release history and target apps.
 - The Releases tab lists every published release, stable and pre-release, with their APKs.

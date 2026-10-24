@@ -47,6 +47,7 @@ class RepoApiTest {
         assertEquals("https://github.com/example/module/releases/download/42-4.2/example.apk",
             module.releaseFor(UpdateChannel.STABLE)?.apkAssets?.single()?.downloadUrl)
         assertEquals(1, module.scope.size)
+        assertEquals(12, module.stargazerCount)
         assertEquals("2026-01-03T03:04:05Z", module.addedAt)
 
         val inferred = result.modules.first { it.packageName == "com.inferred.module" }

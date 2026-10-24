@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.InstallMobile
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,6 +50,7 @@ import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.formatBytes
+import java.util.Locale
 
 @Composable
 fun ModuleAvatar(module: RepoModule, size: Dp = 52.dp) {
@@ -135,6 +138,51 @@ fun StatusPill(
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
         )
     }
+}
+
+@Composable
+fun StarBadge(count: Int, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(percent = 50),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Star,
+                contentDescription = null,
+                modifier = Modifier.size(11.dp),
+                tint = MaterialTheme.colorScheme.tertiary,
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = formatStarCount(count),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** 25129 becomes 25.1k, so the badge stays narrow on a card. */
+fun formatStarCount(count: Int): String = when {
+    count >= 1_000_000 -> compact(count / 1_000_000.0) + "M"
+    count >= 1_000 -> compact(count / 1_000.0) + "k"
+    else -> count.toString()
+}
+
+private fun compact(value: Double): String {
+    val text = if (value >= 100) {
+        "%.0f".format(Locale.US, value)
+    } else {
+        "%.1f".format(Locale.US, value)
+    }
+    return text.removeSuffix(".0")
 }
 
 @Composable

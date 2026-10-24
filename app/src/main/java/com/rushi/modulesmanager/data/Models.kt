@@ -23,7 +23,8 @@ enum class UpdateChannel(val key: String, val label: String, val description: St
 enum class SortMode(val key: String, val label: String) {
     NAME("name", "Name"),
     UPDATED("updated", "Last updated"),
-    ADDED("added", "Recently added");
+    ADDED("added", "Recently added"),
+    STARS("stars", "Most starred");
 
     companion object {
         fun fromKey(key: String?): SortMode = entries.firstOrNull { it.key == key } ?: UPDATED
