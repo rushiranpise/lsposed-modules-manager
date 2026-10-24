@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.InstallMobile
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Verified
@@ -142,6 +143,31 @@ fun StatusPill(
 
 @Composable
 fun StarBadge(count: Int, modifier: Modifier = Modifier) {
+    CountBadge(
+        count = count,
+        imageVector = Icons.Outlined.Star,
+        tint = MaterialTheme.colorScheme.tertiary,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun ForkBadge(count: Int, modifier: Modifier = Modifier) {
+    CountBadge(
+        count = count,
+        imageVector = Icons.Outlined.ForkRight,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun CountBadge(
+    count: Int,
+    imageVector: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -153,10 +179,10 @@ fun StarBadge(count: Int, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Outlined.Star,
+                imageVector = imageVector,
                 contentDescription = null,
                 modifier = Modifier.size(11.dp),
-                tint = MaterialTheme.colorScheme.tertiary,
+                tint = tint,
             )
             Spacer(Modifier.width(3.dp))
             Text(

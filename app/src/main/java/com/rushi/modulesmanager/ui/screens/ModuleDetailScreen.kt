@@ -730,6 +730,9 @@ private fun InformationTab(
         if (module.stargazerCount > 0) {
             InfoRow("Stars", module.stargazerCount.toString())
         }
+        if (module.forkCount > 0) {
+            InfoRow("Forks", module.forkCount.toString())
+        }
         if (module.scope.isNotEmpty()) {
             InfoRow(
                 title = "Target apps",

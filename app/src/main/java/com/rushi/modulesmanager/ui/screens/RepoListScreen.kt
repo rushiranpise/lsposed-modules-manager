@@ -73,6 +73,7 @@ import com.rushi.modulesmanager.data.parseInstant
 import com.rushi.modulesmanager.ui.components.CountedFilterChip
 import com.rushi.modulesmanager.ui.components.EmptyState
 import com.rushi.modulesmanager.ui.components.ErrorBanner
+import com.rushi.modulesmanager.ui.components.ForkBadge
 import com.rushi.modulesmanager.ui.components.HeaderDivider
 import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
@@ -473,6 +474,10 @@ private fun ModuleCard(
                 if (module.stargazerCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     StarBadge(module.stargazerCount)
+                }
+                if (module.forkCount > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    ForkBadge(module.forkCount)
                 }
             }
             Spacer(Modifier.size(14.dp))

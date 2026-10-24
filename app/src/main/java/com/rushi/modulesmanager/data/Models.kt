@@ -97,6 +97,8 @@ data class RepoModule(
     val hide: Boolean,
     val updatedAt: String?,
     val stargazerCount: Int,
+    /** GitHub forks from the daily index. */
+    val forkCount: Int = 0,
     /** When the daily index first saw this module. */
     val addedAt: String? = null,
     /** GitHub repo that hosts releases, used for live update checks. */
@@ -398,6 +400,7 @@ object RepoJson {
             hide = false,
             updatedAt = obj.optString("pushed_at").takeIf { it.isNotBlank() && it != "null" } ?: publishedAt,
             stargazerCount = obj.optInt("stargazers_count", 0),
+            forkCount = obj.optInt("forks_count", 0),
             addedAt = obj.optString("added_at").takeIf { it.isNotBlank() && it != "null" },
             repoFullName = orgRepo.takeIf { it.isNotBlank() && it != "null" } ?: fullName,
         )
