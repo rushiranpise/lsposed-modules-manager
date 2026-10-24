@@ -943,20 +943,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         val installedPackage = _installedVersions.value[module.packageName]
-        if (installedPackage != null) {
-            if (info.versionCode < installedPackage.versionCode) {
-                throw IllegalStateException("This release is older than the installed version")
-            }
-            val installedSignature = withContext(Dispatchers.IO) {
-                ApkInspector.installedSignatureDigest(context, module.packageName)
-            }
-            if (installedSignature != null && info.signatureDigest != null &&
-                installedSignature != info.signatureDigest
-            ) {
-                throw IllegalStateException(
-                    "This APK is signed with a different key, so Android cannot update the installed app",
-                )
-            }
+        if (installedPackage != null && info.versionCode < installedPackage.versionCode) {
+            throw IllegalStateException("This release is older than the installed version")
         }
         return file
     }
