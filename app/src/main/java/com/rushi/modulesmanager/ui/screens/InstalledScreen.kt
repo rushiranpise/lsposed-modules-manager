@@ -573,9 +573,13 @@ private fun InstalledCard(
                 PackageLabel(module.packageName)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val showsUpdate = update != null && !ignored && skippedVersion == null
                     Text(
                         text = buildString {
                             append("v${module.versionName ?: module.versionCode}")
+                            if (showsUpdate && update != null) {
+                                append(" \u2192 v${shortVersion(update.version.name)}")
+                            }
                             if (module.scope.isNotEmpty()) append(" - ${module.scope.size} targets")
                         },
                         style = MaterialTheme.typography.labelSmall,
@@ -584,23 +588,20 @@ private fun InstalledCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(8.dp))
-                    when {
-                        ignored -> StatusPill(text = "Updates ignored")
-                        skippedVersion != null -> StatusPill(
-                            text = "Skipped ${shortVersion(skippedVersion.substringAfter('-'))}",
-                        )
-                        update != null -> StatusPill(
-                            text = "Update ${shortVersion(update.version.name)}",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        repoModule != null -> StatusPill(
-                            text = "Up to date",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        else -> StatusPill(text = "Not in repository")
+                    if (ignored || skippedVersion != null || update == null) {
+                        Spacer(Modifier.width(8.dp))
+                        when {
+                            ignored -> StatusPill(text = "Updates ignored")
+                            skippedVersion != null -> StatusPill(
+                                text = "Skipped ${shortVersion(skippedVersion.substringAfter('-'))}",
+                            )
+                            repoModule != null -> StatusPill(
+                                text = "Up to date",
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                            else -> StatusPill(text = "Not in repository")
+                        }
                     }
                     if (update != null) {
                         Spacer(Modifier.width(8.dp))
@@ -615,7 +616,7 @@ private fun InstalledCard(
                                 modifier = Modifier.size(14.dp),
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Install", style = MaterialTheme.typography.labelMedium)
+                            Text("Update", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
