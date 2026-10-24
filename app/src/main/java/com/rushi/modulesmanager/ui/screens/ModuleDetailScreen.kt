@@ -339,18 +339,15 @@ private fun DetailHeader(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
                         hasUpdate -> StatusPill(
-                            text = "Update ${shortVersion(updateVersion.name)}",
+                            text = "v${installedVersion.orEmpty()} \u2192 v${shortVersion(updateVersion.name)}",
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         isInstalled -> StatusPill(
-                            text = "Installed ${shortVersion(installedVersion)}".trim(),
+                            text = "Installed v${shortVersion(installedVersion)}",
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
-                    }
-                    if (isInstalled && hasUpdate) {
-                        StatusPill(text = "Installed ${shortVersion(installedVersion)}".trim())
                     }
                 }
             }
