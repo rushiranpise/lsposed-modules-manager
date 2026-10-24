@@ -865,6 +865,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             // A manual link must load even when the cached ETag says the releases are unchanged.
             val releases = container.liveApi.fetchAll(repoFullName, useCache = false).orEmpty()
             if (releases.isEmpty()) return@runCatching null
+            val stats = container.liveApi.fetchStats(repoFullName)
             val mapped = releases.map { it.toRepoRelease() }
             val stable = mapped.filter { !it.isPrerelease && !it.isSnapshot }
             val beta = mapped.filter { it.isPrerelease && !it.isSnapshot }
@@ -892,7 +893,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 scope = emptyList(),
                 hide = false,
                 updatedAt = latest?.publishedAt,
-                stargazerCount = 0,
+                stargazerCount = stats?.stars ?: 0,
+                forkCount = stats?.forks ?: 0,
                 repoFullName = repoFullName,
                 releaseHistory = mapped,
             )

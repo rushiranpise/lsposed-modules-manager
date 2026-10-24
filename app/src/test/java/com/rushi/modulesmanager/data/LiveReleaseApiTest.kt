@@ -87,6 +87,39 @@ class LiveReleaseApiTest {
     }
 
     @Test
+    fun `reads stars and forks from the repository api`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody("""{"stargazers_count":1234,"forks_count":56}"""),
+        )
+
+        val stats = api().fetchStats("example/module")
+
+        assertEquals(1234, stats?.stars)
+        assertEquals(56, stats?.forks)
+        assertEquals("/repos/example/module", server.takeRequest().path)
+    }
+
+    @Test
+    fun `reads stats from the repo page when the api is limited`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <span id="repo-stars-counter-star" title="1,234">1.2k</span>
+                <span id="repo-network-counter" title="56"></span>
+                """.trimIndent(),
+            ),
+        )
+
+        val stats = api().fetchStats("example/module")
+
+        assertEquals(1234, stats?.stars)
+        assertEquals(56, stats?.forks)
+        assertEquals("/repos/example/module", server.takeRequest().path)
+        assertEquals("/example/module", server.takeRequest().path)
+    }
+
+    @Test
     fun `manual links bypass the release etag`() = runBlocking {
         server.enqueue(MockResponse().setBody(RELEASES).addHeader("ETag", "\"v1\""))
         server.enqueue(MockResponse().setBody(RELEASES))

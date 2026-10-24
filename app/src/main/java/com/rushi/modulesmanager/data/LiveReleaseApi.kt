@@ -20,6 +20,8 @@ class LiveReleaseApi(
     private val webBase: String = "https://github.com",
 ) {
 
+    data class RepoStats(val stars: Int, val forks: Int)
+
     data class LiveRelease(
         val tag: String,
         val name: String?,
@@ -42,6 +44,49 @@ class LiveReleaseApi(
 
     /** ETag per repository, so unchanged releases return 304 and do not consume the rate limit. */
     private val etags = ConcurrentHashMap<String, String>()
+
+    /** GitHub stars and forks for a repository, with an HTML fallback when the API is limited. */
+    suspend fun fetchStats(repoFullName: String): RepoStats? = withContext(Dispatchers.IO) {
+        apiStats(repoFullName) ?: htmlStats(repoFullName)
+    }
+
+    private fun apiStats(repoFullName: String): RepoStats? = runCatching {
+        val request = Request.Builder()
+            .url("${apiBase.trimEnd('/')}/repos/$repoFullName")
+            .header("User-Agent", RepoApi.USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string() ?: return@use null
+            val obj = JSONObject(body)
+            RepoStats(
+                stars = obj.optInt("stargazers_count", 0),
+                forks = obj.optInt("forks_count", 0),
+            )
+        }
+    }.getOrNull()
+
+    private fun htmlStats(repoFullName: String): RepoStats? = runCatching {
+        val request = Request.Builder()
+            .url("${webBase.trimEnd('/')}/$repoFullName")
+            .header("User-Agent", RepoApi.USER_AGENT)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val html = response.body?.string() ?: return@use null
+            RepoStats(
+                stars = htmlCount(html, "repo-stars-counter-star") ?: return@use null,
+                forks = htmlCount(html, "repo-network-counter") ?: return@use null,
+            )
+        }
+    }.getOrNull()
+
+    private fun htmlCount(html: String, id: String): Int? {
+        val tag = Regex("""<[^>]*id="$id"[^>]*>""").find(html)?.value ?: return null
+        val title = Regex("""title="([\d,]+)""").find(tag)?.groupValues?.getOrNull(1) ?: return null
+        return title.replace(",", "").toIntOrNull()
+    }
 
     suspend fun fetchLatest(repoFullName: String): LiveRelease? = try {
         fetchLatestFromApi(repoFullName)
