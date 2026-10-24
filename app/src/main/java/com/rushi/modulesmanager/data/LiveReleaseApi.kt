@@ -7,6 +7,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 class LiveReleaseApi(
     private val client: OkHttpClient,
     private val apiBase: String = "https://api.github.com",
+    private val webBase: String = "https://github.com",
 ) {
 
     data class LiveRelease(
@@ -83,7 +85,13 @@ class LiveReleaseApi(
      * the newest release per channel, so the detail screen needs this to list release history.
      * Returns null when the ETag matched and the caller should keep what it already shows.
      */
-    suspend fun fetchAll(repoFullName: String): List<LiveRelease>? = withContext(Dispatchers.IO) {
+    suspend fun fetchAll(repoFullName: String): List<LiveRelease>? = try {
+        fetchAllFromApi(repoFullName)
+    } catch (_: LiveUpdateRateLimitException) {
+        fetchAllFromAtom(repoFullName)
+    }
+
+    private suspend fun fetchAllFromApi(repoFullName: String): List<LiveRelease>? = withContext(Dispatchers.IO) {
         val cacheKey = "all:$repoFullName"
         val request = Request.Builder()
             .url("${apiBase.trimEnd('/')}/repos/$repoFullName/releases?per_page=100")
@@ -127,6 +135,117 @@ class LiveReleaseApi(
                 }
             }
         }
+    }
+
+    /**
+     * Public Atom feed fallback. It lists recent releases and notes without the API quota; the
+     * expanded-assets fragment supplies the APK links for each tag.
+     */
+    private suspend fun fetchAllFromAtom(repoFullName: String): List<LiveRelease>? =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("${webBase.trimEnd('/')}/$repoFullName/releases.atom")
+                .header("User-Agent", RepoApi.USER_AGENT)
+                .header("Accept", "application/atom+xml")
+                .build()
+            val xml = runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    response.body?.string()
+                }
+            }.getOrNull() ?: return@withContext null
+
+            val releases = parseAtomEntries(xml)
+            if (releases.isEmpty()) return@withContext null
+            releases.map { release ->
+                release.copy(assets = fetchAtomAssets(repoFullName, release.tag))
+            }
+        }
+
+    private fun parseAtomEntries(xml: String): List<LiveRelease> =
+        ENTRY.findAll(xml).mapNotNull { match ->
+            val block = match.groupValues[1]
+            val title = TITLE.find(block)?.groupValues?.getOrNull(1)
+                ?.let(::unescapeXml)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val url = alternateHref(block)
+            // The entry title is the release name; the tag is the last segment of its page URL.
+            val tag = url?.substringAfter("/releases/tag/", "")
+                ?.substringBefore('?')
+                ?.takeIf { it.isNotBlank() }
+                ?: title
+            LiveRelease(
+                tag = tag,
+                name = title.takeIf { it != tag },
+                publishedAt = UPDATED.find(block)?.groupValues?.getOrNull(1)?.trim(),
+                url = url,
+                isPrerelease = PRE_RELEASE.containsMatchIn("$tag $title"),
+                description = CONTENT.find(block)?.groupValues?.getOrNull(1)
+                    ?.let(::unescapeXml)
+                    ?.takeIf { it.isNotBlank() },
+                assets = emptyList(),
+            )
+        }.take(MAX_ATOM_RELEASES).toList()
+
+    private fun alternateHref(entry: String): String? {
+        val link = LINK.findAll(entry)
+            .firstOrNull { it.value.contains("rel=\"alternate\"") }
+            ?.value ?: return null
+        return HREF.find(link)?.groupValues?.getOrNull(1)?.let(::unescapeXml)
+    }
+
+    private fun fetchAtomAssets(repoFullName: String, tag: String): List<RepoAsset> {
+        val encodedTag = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
+        val url = "${webBase.trimEnd('/')}/$repoFullName/releases/expanded_assets/$encodedTag"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", RepoApi.USER_AGENT)
+            .build()
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return emptyList()
+                val html = response.body?.string().orEmpty()
+                APK_LINK.findAll(html).mapNotNull { match ->
+                    val href = match.groupValues[1]
+                    val absolute = when {
+                        href.startsWith("http") -> href
+                        href.startsWith("//") -> "https:$href"
+                        else -> "${webBase.trimEnd('/')}$href"
+                    }
+                    RepoAsset(
+                        name = absolute.substringAfterLast('/').substringBefore('?'),
+                        contentType = "application/vnd.android.package-archive",
+                        downloadUrl = absolute,
+                        downloadCount = 0,
+                        size = 0L,
+                    )
+                }.distinctBy { it.downloadUrl }.toList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun unescapeXml(value: String): String = value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+
+    private companion object {
+        const val MAX_ATOM_RELEASES = 10
+        val ENTRY = Regex("""<entry>(.*?)</entry>""", RegexOption.DOT_MATCHES_ALL)
+        val TITLE = Regex("""<title>(.*?)</title>""", RegexOption.DOT_MATCHES_ALL)
+        val UPDATED = Regex("""<updated>(.*?)</updated>""", RegexOption.DOT_MATCHES_ALL)
+        val CONTENT = Regex("""<content[^>]*>(.*?)</content>""", RegexOption.DOT_MATCHES_ALL)
+        val LINK = Regex("""<link\b[^>]*>""")
+        val HREF = Regex("""href="([^"]+)"""")
+        val APK_LINK = Regex("""href="([^"]+\.apk)""", RegexOption.IGNORE_CASE)
+        val PRE_RELEASE = Regex(
+            """(?i)(^|[-_. ])(alpha|beta|rc\d*|canary|snapshot|nightly|preview)([-_. ]|$)""",
+        )
     }
 
     private fun parseAssets(json: JSONObject): List<RepoAsset> {

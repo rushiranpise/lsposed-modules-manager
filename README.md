@@ -49,7 +49,7 @@ The app reads the daily index from:
 
 Each entry provides the package, summary, target scope and latest APK release. Installed modules are checked against GitHub releases when the app starts, then at most once every six hours, so releases published after the daily snapshot still appear. The index has no README and keeps only the newest release per channel, so opening a module fetches its README from raw.githubusercontent.com and its release history from the GitHub API. Unauthenticated GitHub API rate limits can delay the history until the quota resets.
 
-The Installed tab counts every installed module. The Installed filter on the Modules screen only counts modules that are in the index.
+The Installed tab counts every installed module. The Installed filter on the Modules screen only counts modules that are in the index. When the GitHub API rate limit is reached, manually linked repositories fall back to the public releases Atom feed and its expanded asset list.
 
 ## License
 

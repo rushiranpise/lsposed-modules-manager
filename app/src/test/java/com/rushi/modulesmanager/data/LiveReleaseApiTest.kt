@@ -27,6 +27,7 @@ class LiveReleaseApiTest {
     private fun api() = LiveReleaseApi(
         client = RepoApi.createClient(),
         apiBase = server.url("/").toString().trimEnd('/'),
+        webBase = server.url("/").toString().trimEnd('/'),
     )
 
     @Test
@@ -84,7 +85,53 @@ class LiveReleaseApiTest {
         )
     }
 
+    @Test
+    fun `falls back to the releases feed when the api is rate limited`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.enqueue(MockResponse().setBody(ATOM_FEED))
+        server.enqueue(MockResponse().setBody(ATOM_ASSETS))
+
+        val releases = api().fetchAll("example/module")
+
+        assertEquals(1, releases?.size)
+        val release = releases?.single()
+        assertEquals("1.0", release?.tag)
+        assertEquals("<p>Notes</p>", release?.description)
+        assertEquals("module-1.0.apk", release?.assets?.single()?.name)
+        assertTrue(
+            release?.assets?.single()?.downloadUrl?.endsWith(
+                "/example/module/releases/download/1.0/module-1.0.apk",
+            ) == true,
+        )
+        assertEquals("/repos/example/module/releases?per_page=100", server.takeRequest().path)
+        assertEquals("/example/module/releases.atom", server.takeRequest().path)
+        assertEquals(
+            "/example/module/releases/expanded_assets/1.0",
+            server.takeRequest().path,
+        )
+    }
+
     private companion object {
+        val ATOM_FEED = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Release notes from module</title>
+              <entry>
+                <title>1.0</title>
+                <updated>2026-02-01T00:00:00Z</updated>
+                <link rel="alternate" type="text/html" href="https://github.com/example/module/releases/tag/1.0"/>
+                <content type="html">&lt;p&gt;Notes&lt;/p&gt;</content>
+              </entry>
+            </feed>
+        """.trimIndent()
+
+        val ATOM_ASSETS = """
+            <ul>
+              <li><a href="/example/module/releases/download/1.0/module-1.0.apk">module-1.0.apk</a></li>
+              <li><a href="/example/module/releases/download/1.0/checksums.txt">checksums.txt</a></li>
+            </ul>
+        """.trimIndent()
+
         val RELEASES = """
             [
               {
