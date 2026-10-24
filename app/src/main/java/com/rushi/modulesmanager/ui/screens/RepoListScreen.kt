@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -141,6 +142,10 @@ fun RepoListScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(query, filter, sortMode, updatesFirst, channel) {
+        listState.scrollToItem(0)
+    }
+
     val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
         val matched = when (filter) {
             RepoFilter.ALL -> searched
@@ -193,7 +198,10 @@ fun RepoListScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
                     actions = {
-                        IconButton(onClick = viewModel::refresh) {
+                        IconButton(onClick = {
+                            scope.launch { listState.scrollToItem(0) }
+                            viewModel.refresh()
+                        }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
                         }
                         Box {

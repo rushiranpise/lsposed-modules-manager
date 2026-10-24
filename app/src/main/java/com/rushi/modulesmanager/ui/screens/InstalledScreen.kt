@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -154,6 +155,10 @@ fun InstalledScreen(
         )
     }
 
+    LaunchedEffect(query, filter) {
+        listState.scrollToItem(0)
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -161,7 +166,10 @@ fun InstalledScreen(
                 TopAppBar(
                     title = { Text("Installed") },
                     actions = {
-                        IconButton(onClick = { viewModel.rescan(showMessage = true) }) {
+                        IconButton(onClick = {
+                            scope.launch { listState.scrollToItem(0) }
+                            viewModel.rescan(showMessage = true)
+                        }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Rescan installed modules")
                         }
                     },
