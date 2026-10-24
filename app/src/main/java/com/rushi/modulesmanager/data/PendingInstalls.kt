@@ -11,7 +11,22 @@ data class PendingInstall(
     val versionCode: Long,
     val versionName: String?,
     val startedAt: Long,
-)
+) {
+    /** True when the installed copy is the one this pending install was waiting for. */
+    fun landed(installed: InstalledPackageVersion?): Boolean {
+        if (installed == null) return false
+        if (installed.lastUpdateTime >= startedAt) return true
+        return when {
+            versionCode > 0L && installed.versionCode > 0L ->
+                installed.versionCode >= versionCode
+            versionName != null -> {
+                val expected = ModuleVersion(versionCode, versionName)
+                !expected.isNewerThan(installed.versionCode, installed.versionName)
+            }
+            else -> false
+        }
+    }
+}
 
 /**
  * Survives process death: the system installer and the session confirmation can finish while

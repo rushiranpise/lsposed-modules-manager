@@ -97,6 +97,25 @@ class InstalledModuleScanner(private val context: Context) {
         }.getOrDefault(false)
     }
 
+    /** Current version of one package, used to confirm an install without a full rescan. */
+    fun installedVersion(packageName: String): InstalledPackageVersion? = try {
+        @Suppress("DEPRECATION")
+        val info = pm.getPackageInfo(packageName, 0)
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+        InstalledPackageVersion(
+            versionName = info.versionName,
+            versionCode = versionCode,
+            lastUpdateTime = info.lastUpdateTime,
+        )
+    } catch (_: PackageManager.NameNotFoundException) {
+        null
+    }
+
     /** Basic app data for any installed package, including modules without Xposed metadata. */
     fun installedModule(packageName: String): InstalledModule? = try {
         @Suppress("DEPRECATION")

@@ -955,19 +955,39 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Remembers the version the external installer is expected to land. */
-    private fun markPending(module: RepoModule, asset: RepoAsset, version: ModuleVersion? = null) {
+    private fun markPending(
+        module: RepoModule,
+        asset: RepoAsset,
+        version: ModuleVersion? = null,
+    ): PendingInstall {
         val expected = version ?: module.allReleases()
             .firstOrNull { release -> release.assets.any { it.downloadUrl == asset.downloadUrl } }
             ?.let { ModuleVersion.parse(it.tagName ?: it.name) }
-        container.pendingInstalls.put(
-            PendingInstall(
-                packageName = module.packageName,
-                label = module.displayName,
-                versionCode = expected?.code ?: 0L,
-                versionName = expected?.name,
-                startedAt = System.currentTimeMillis(),
-            ),
+        val pending = PendingInstall(
+            packageName = module.packageName,
+            label = module.displayName,
+            versionCode = expected?.code ?: 0L,
+            versionName = expected?.name,
+            startedAt = System.currentTimeMillis(),
         )
+        container.pendingInstalls.put(pending)
+        return pending
+    }
+
+    /** Keeps the serial install slot busy until the external installer lands the package. */
+    private suspend fun awaitLanded(pending: PendingInstall): Boolean {
+        val deadline = System.currentTimeMillis() + DELEGATED_INSTALL_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val installed = withContext(Dispatchers.IO) {
+                container.scanner.installedVersion(pending.packageName)
+            }
+            if (pending.landed(installed)) return true
+            delay(1000)
+        }
+        val installed = withContext(Dispatchers.IO) {
+            container.scanner.installedVersion(pending.packageName)
+        }
+        return pending.landed(installed)
     }
 
     /** Clears the installs that actually landed while the app was away. */
@@ -978,18 +998,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val completed = mutableListOf<PendingInstall>()
         for (item in pending) {
             val installed = installedVersionMap[item.packageName]
-            val landed = installed != null && (
-                installed.lastUpdateTime >= item.startedAt ||
-                    when {
-                        item.versionCode > 0L && installed.versionCode > 0L ->
-                            installed.versionCode >= item.versionCode
-                        item.versionName != null -> {
-                            val expected = ModuleVersion(item.versionCode, item.versionName)
-                            !expected.isNewerThan(installed.versionCode, installed.versionName)
-                        }
-                        else -> false
-                    }
-                )
+            val landed = item.landed(installed)
             when {
                 landed -> {
                     container.pendingInstalls.remove(item.packageName)
@@ -1219,7 +1228,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 it?.copy(current = update.module.displayName)
                             }
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.INSTALLING) }
-                            markPending(update.module, prepared.asset, update.version)
+                            val pending = markPending(update.module, prepared.asset, update.version)
                             val result = try {
                                 installDownloaded(appContext, prepared.file, update.module, announce = false)
                             } catch (e: CancellationException) {
@@ -1235,7 +1244,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     prepared.file.delete()
                                 }
                                 InstallResult.Delegated -> {
-                                    updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
+                                    if (awaitLanded(pending)) {
+                                        container.pendingInstalls.remove(packageName)
+                                        updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
+                                    } else {
+                                        container.pendingInstalls.remove(packageName)
+                                        val reason = "The installer did not confirm the install"
+                                        failures += "${update.module.displayName}: $reason"
+                                        updateBatchItem(packageName) {
+                                            it.copy(phase = BatchPhase.FAILED, error = reason)
+                                        }
+                                    }
                                 }
                                 is InstallResult.Failure -> {
                                     container.pendingInstalls.remove(packageName)
@@ -1506,6 +1525,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         private const val LIVE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
         private const val PENDING_INSTALL_TIMEOUT_MS = 30 * 60 * 1000L
+        private const val DELEGATED_INSTALL_TIMEOUT_MS = 2 * 60 * 1000L
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer { AppViewModel(container) }
         }
