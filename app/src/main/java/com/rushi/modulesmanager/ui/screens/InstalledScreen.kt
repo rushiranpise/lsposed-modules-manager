@@ -554,7 +554,7 @@ private fun InstalledCard(
                             }
                             if (repoModule != null) {
                                 DropdownMenuItem(
-                                    text = { Text("View repository") },
+                                    text = { Text("View module") },
                                     onClick = {
                                         menuOpen = false
                                         onOpenRepository()
