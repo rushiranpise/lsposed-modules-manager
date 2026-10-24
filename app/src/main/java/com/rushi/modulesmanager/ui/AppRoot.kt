@@ -1,12 +1,15 @@
 package com.rushi.modulesmanager.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -17,6 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,6 +41,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rushi.modulesmanager.AppViewModel
+import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.DownloadBanner
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
 import com.rushi.modulesmanager.ui.screens.ModuleDetailScreen
@@ -53,6 +60,7 @@ fun AppRoot(viewModel: AppViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val download by viewModel.downloads.collectAsStateWithLifecycle()
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
+    val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute != null && !currentRoute.startsWith("module/")
@@ -144,6 +152,47 @@ fun AppRoot(viewModel: AppViewModel) {
                 )
             }
         }
+    }
+
+    variantChoice?.let { choice ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelVariantChoice,
+            title = { Text("Choose an APK") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "${choice.module.displayName}\nSeveral APKs fit this device equally well.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    choice.assets.forEach { asset ->
+                        TextButton(
+                            onClick = { viewModel.installVariant(asset) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = asset.name,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (asset.size > 0) {
+                                    Text(
+                                        text = formatBytes(asset.size),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelVariantChoice) { Text("Cancel") }
+            },
+        )
     }
 }
 

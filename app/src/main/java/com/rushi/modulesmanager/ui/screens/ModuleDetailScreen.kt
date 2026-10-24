@@ -47,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -55,7 +54,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -112,7 +110,6 @@ fun ModuleDetailScreen(
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOriginalReadme by rememberSaveable(packageName) { mutableStateOf(false) }
-    var pendingRelease by remember { mutableStateOf<RepoRelease?>(null) }
 
     val context = LocalContext.current
     val module = detail
@@ -234,13 +231,7 @@ fun ModuleDetailScreen(
                 channel = channel,
                 primaryAsset = primaryAsset,
                 onInstall = {
-                    if (release != null) {
-                        if (release.apkAssets.size > 1) {
-                            pendingRelease = release
-                        } else if (primaryAsset != null) {
-                            viewModel.install(module, primaryAsset)
-                        }
-                    }
+                    if (release != null) viewModel.installRelease(module, release)
                 },
                 onOpenModule = { viewModel.openInstalledModule(packageName) },
                 onOpenAppInfo = { viewModel.openAppInfo(packageName) },
@@ -286,36 +277,6 @@ fun ModuleDetailScreen(
         }
     }
 
-    if (pendingRelease != null) {
-        val target = pendingRelease
-        if (target != null && module != null) {
-            ModalBottomSheet(
-                onDismissRequest = { pendingRelease = null },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 32.dp),
-                ) {
-                    Text("Choose an APK", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        text = target.name ?: target.tagName.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    target.apkAssets.forEach { asset ->
-                        AssetRow(asset = asset) {
-                            pendingRelease = null
-                            viewModel.install(module, asset)
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

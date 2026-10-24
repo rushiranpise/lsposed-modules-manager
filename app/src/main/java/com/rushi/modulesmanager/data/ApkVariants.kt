@@ -53,22 +53,30 @@ object ApkVariants {
         )
     }
 
+    /**
+     * The usable assets with the highest score. More than one means the variants fit this device
+     * equally well, so the user should choose instead of the app guessing.
+     */
+    fun bestChoices(
+        assets: List<RepoAsset>,
+        sdk: Int = Build.VERSION.SDK_INT,
+        deviceAbis: List<String> = Build.SUPPORTED_ABIS.toList(),
+    ): List<RepoAsset> {
+        if (assets.isEmpty()) return emptyList()
+        val scored = assets
+            .map { asset -> traits(asset) to score(traits(asset), sdk, deviceAbis) }
+            .filter { (trait, score) -> score >= 0 && !trait.bundled }
+        if (scored.isEmpty()) return assets.filterNot { traits(it).bundled }
+        val best = scored.maxOf { (_, score) -> score }
+        return scored.filter { (_, score) -> score == best }.map { (trait, _) -> trait.asset }
+    }
+
     /** Returns the asset to install, or null when every asset is unusable on this device. */
     fun pick(
         assets: List<RepoAsset>,
         sdk: Int = Build.VERSION.SDK_INT,
         deviceAbis: List<String> = Build.SUPPORTED_ABIS.toList(),
-    ): RepoAsset? {
-        if (assets.isEmpty()) return null
-        if (assets.size == 1) return assets.first()
-        val scored = assets.map { asset -> traits(asset) to score(traits(asset), sdk, deviceAbis) }
-            .filter { (trait, score) -> score >= 0 && !trait.bundled }
-        if (scored.isEmpty()) return assets.firstOrNull { !traits(it).bundled }
-        val sorted = scored.sortedByDescending { it.second }
-        // A clear fit (native ABI, compatible minSdk) wins; otherwise take the best guess
-        // instead of failing the install.
-        return sorted.first().first.asset
-    }
+    ): RepoAsset? = bestChoices(assets, sdk, deviceAbis).firstOrNull()
 
     private fun score(trait: Trait, sdk: Int, deviceAbis: List<String>): Int {
         if (trait.minSdk != null && trait.minSdk > sdk) return -1

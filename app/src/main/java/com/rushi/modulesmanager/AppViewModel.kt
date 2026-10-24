@@ -16,6 +16,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rushi.modulesmanager.data.ApkInspector
 import com.rushi.modulesmanager.data.ApkInstaller
+import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.AppTheme
 import com.rushi.modulesmanager.data.DefaultSources
 import com.rushi.modulesmanager.data.DownloadCenter
@@ -30,6 +31,7 @@ import com.rushi.modulesmanager.data.PendingInstall
 import com.rushi.modulesmanager.data.ReadmeTranslator
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
+import com.rushi.modulesmanager.data.RepoRelease
 import com.rushi.modulesmanager.data.RootInstaller
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.SortMode
@@ -76,6 +78,13 @@ data class ModuleUpdate(
     val installed: InstalledModule,
     val module: RepoModule,
     val version: ModuleVersion,
+)
+
+/** A release with several equally suitable APKs, waiting for the user's choice. */
+data class VariantChoice(
+    val module: RepoModule,
+    val release: RepoRelease,
+    val assets: List<RepoAsset>,
 )
 
 enum class BatchPhase { QUEUED, DOWNLOADING, WAITING_TO_INSTALL, INSTALLING, COMPLETED, FAILED }
@@ -210,6 +219,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
     val batchUpdate: StateFlow<BatchUpdateState?> = _batchUpdate.asStateFlow()
+
+    private val _variantChoice = MutableStateFlow<VariantChoice?>(null)
+    val variantChoice: StateFlow<VariantChoice?> = _variantChoice.asStateFlow()
 
     /** Synthetic modules for manual GitHub links, keyed by the installed package name. */
     private val _manualModules = MutableStateFlow<Map<String, RepoModule>>(emptyMap())
@@ -1290,13 +1302,37 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 message("The repository is still serving an older release")
                 return@launch
             }
-            val asset = release?.preferredAsset()
-            if (asset == null) {
-                message("No APK is available for ${module.displayName}")
-                return@launch
-            }
-            install(detailed, asset)
+            installRelease(detailed, release)
         }
+    }
+
+    /** Installs the release, asking which APK when several fit the device equally well. */
+    fun installRelease(module: RepoModule, release: RepoRelease?) {
+        val options = release?.let { ApkVariants.bestChoices(it.apkAssets) }.orEmpty()
+        when {
+            options.size > 1 && release != null -> {
+                _variantChoice.value = VariantChoice(module, release, options)
+            }
+            options.size == 1 -> install(module, options.first())
+            else -> {
+                val fallback = release?.preferredAsset()
+                if (fallback != null) {
+                    install(module, fallback)
+                } else {
+                    message("No APK is available for ${module.displayName}")
+                }
+            }
+        }
+    }
+
+    fun installVariant(asset: RepoAsset) {
+        val choice = _variantChoice.value ?: return
+        _variantChoice.value = null
+        install(choice.module, asset)
+    }
+
+    fun cancelVariantChoice() {
+        _variantChoice.value = null
     }
 
     fun cancelDownload() {
