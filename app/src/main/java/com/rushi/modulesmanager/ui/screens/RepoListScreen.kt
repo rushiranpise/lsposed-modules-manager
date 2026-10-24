@@ -364,58 +364,52 @@ fun RepoListScreen(
 
 /** The description line, swapped for its translation while one is showing. */
 @Composable
-private fun DescriptionBlock(
-    summary: String,
-    translation: TranslationState?,
-    showTranslate: Boolean,
+private fun DescriptionBlock(summary: String, translation: TranslationState?) {
+    val translated = translation?.text
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = translated ?: summary,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (translated != null) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** The translate toggle shown beside the date. */
+@Composable
+private fun TranslateAction(
+    translated: Boolean,
+    loading: Boolean,
     onTranslate: () -> Unit,
     onShowOriginal: () -> Unit,
 ) {
-    val translated = translation?.text
-    // A showing translation always keeps its undo icon, even if the text looks local.
-    val showIcon = showTranslate || translated != null
-    val loading = translation?.loading == true && showIcon
-    Spacer(Modifier.height(6.dp))
-    Row(verticalAlignment = Alignment.Top) {
-        if (showIcon) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 1.dp)
-                    .size(20.dp)
-                    .clickable(enabled = !loading) {
-                        if (translated != null) onShowOriginal() else onTranslate()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Translate,
-                        contentDescription = if (translated != null) "Show original" else "Translate",
-                        tint = if (translated != null) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(
-            text = translated ?: summary,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (translated != null) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clickable(enabled = !loading) {
+                if (translated) onShowOriginal() else onTranslate()
             },
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        contentAlignment = Alignment.Center,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.Translate,
+                contentDescription = if (translated) "Show original" else "Translate",
+                tint = if (translated) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(14.dp),
+            )
+        }
     }
 }
 
@@ -451,13 +445,7 @@ private fun ModuleCard(
                 Spacer(Modifier.height(2.dp))
                 PackageLabel(module.packageName)
                 module.summary?.takeIf { it.isNotBlank() }?.let { summary ->
-                    DescriptionBlock(
-                        summary = summary,
-                        translation = translation,
-                        showTranslate = showTranslate,
-                        onTranslate = onTranslate,
-                        onShowOriginal = onShowOriginal,
-                    )
+                    DescriptionBlock(summary = summary, translation = translation)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(
@@ -489,6 +477,16 @@ private fun ModuleCard(
                             )
                             latest != null -> StatusPill(text = "v${shortVersion(latest.name)}")
                         }
+                    }
+                    val translated = translation?.text != null
+                    if (showTranslate || translated) {
+                        Spacer(Modifier.width(8.dp))
+                        TranslateAction(
+                            translated = translated,
+                            loading = translation?.loading == true,
+                            onTranslate = onTranslate,
+                            onShowOriginal = onShowOriginal,
+                        )
                     }
                     val date = formatDate(module.latestTime(channel) ?: module.updatedAt)
                     if (date != null) {
