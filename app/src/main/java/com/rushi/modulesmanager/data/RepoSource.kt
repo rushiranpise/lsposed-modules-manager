@@ -16,6 +16,8 @@ data class RepoSource(
     val name: String,
     val bases: List<String>,
     val format: RepoFormat = RepoFormat.REPOS_JSON,
+    /** Commit feed for the data file, used to show when the index actually changed. */
+    val updatedFeed: String? = null,
 )
 
 object DefaultSources {
@@ -27,5 +29,6 @@ object DefaultSources {
             "https://raw.githubusercontent.com/rushiranpise/xposed-modules/main/data/repos.json",
         ),
         format = RepoFormat.REPOS_JSON,
+        updatedFeed = "https://github.com/rushiranpise/xposed-modules/commits/main.atom?path=data%2Frepos.json",
     )
 }

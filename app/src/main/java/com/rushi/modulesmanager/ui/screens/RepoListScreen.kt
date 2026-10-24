@@ -69,6 +69,7 @@ import com.rushi.modulesmanager.data.SortMode
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.data.formatDate
+import com.rushi.modulesmanager.data.formatRelativeTime
 import com.rushi.modulesmanager.data.parseInstant
 import com.rushi.modulesmanager.ui.components.CountedFilterChip
 import com.rushi.modulesmanager.ui.components.EmptyState
@@ -107,6 +108,7 @@ fun RepoListScreen(
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
     val descriptionLanguages by viewModel.descriptionLanguages.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val dataUpdatedAt by viewModel.dataUpdatedAt.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
@@ -171,7 +173,22 @@ fun RepoListScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Modules") },
+                    title = {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text("Modules")
+                            dataUpdatedAt?.let { timestamp ->
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Updated ${formatRelativeTime(timestamp)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),

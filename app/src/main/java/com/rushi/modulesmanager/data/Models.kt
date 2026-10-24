@@ -528,13 +528,17 @@ fun formatDate(value: String?): String? {
 
 fun formatRelativeDate(value: String?): String? {
     val instant = parseInstant(value) ?: return null
-    val seconds = (System.currentTimeMillis() - instant.toEpochMilli()) / 1000
+    return formatRelativeTime(instant.toEpochMilli())
+}
+
+fun formatRelativeTime(epochMs: Long, now: Long = System.currentTimeMillis()): String {
+    val seconds = (now - epochMs) / 1000
     return when {
         seconds < 60 -> "just now"
         seconds < 3600 -> "${seconds / 60} min ago"
         seconds < 86_400 -> "${seconds / 3600} h ago"
         seconds < 86_400 * 30 -> "${seconds / 86_400} d ago"
-        else -> formatDate(value)
+        else -> formatDate(Instant.ofEpochMilli(epochMs).toString()) ?: ""
     }
 }
 

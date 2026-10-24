@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.time.Instant
 
 class RepoApiTest {
 
@@ -56,6 +57,20 @@ class RepoApiTest {
         assertEquals("v1.0", inferred.latestRelease)
         assertEquals("https://github.com/example/inferred/releases/download/v1.0/inferred.apk",
             inferred.releaseFor(UpdateChannel.STABLE)?.apkAssets?.single()?.downloadUrl)
+    }
+
+    @Test
+    fun `reads the data update time from an atom feed`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                "<feed><updated>2026-10-24T07:55:49Z</updated></feed>",
+            ),
+        )
+
+        val timestamp = api().fetchUpdatedAt(server.url("/data.atom").toString())
+
+        assertEquals(Instant.parse("2026-10-24T07:55:49Z").toEpochMilli(), timestamp)
+        assertEquals("/data.atom", server.takeRequest().path)
     }
 
     @Test

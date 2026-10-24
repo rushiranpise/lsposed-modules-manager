@@ -32,6 +32,10 @@ class RepoRepository(
     private val _lastUpdated = MutableStateFlow<Long?>(null)
     val lastUpdated: StateFlow<Long?> = _lastUpdated.asStateFlow()
 
+    /** When the index file itself last changed, not when this app fetched it. */
+    private val _updatedAt = MutableStateFlow<Long?>(null)
+    val updatedAt: StateFlow<Long?> = _updatedAt.asStateFlow()
+
     private val details = ConcurrentHashMap<String, RepoModule>()
     private var activeSourceId: String? = null
     private var packagesWithoutReleases: Set<String> = emptySet()
@@ -44,6 +48,7 @@ class RepoRepository(
             val cached = readCache(source)
             _modules.value = cached?.modules.orEmpty()
             _lastUpdated.value = cached?.savedAt
+            _updatedAt.value = readUpdatedAt(source)
             _error.value = null
         }
 
@@ -60,6 +65,12 @@ class RepoRepository(
             _lastUpdated.value = System.currentTimeMillis()
             _error.value = null
             withContext(Dispatchers.IO) { writeCache(source, fetched.rawJson) }
+            if (source.updatedFeed != null) {
+                api.fetchUpdatedAt(source.updatedFeed)?.let { timestamp ->
+                    _updatedAt.value = timestamp
+                    withContext(Dispatchers.IO) { writeUpdatedAt(source, timestamp) }
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -196,6 +207,18 @@ class RepoRepository(
             .joinToString("") { "%02x".format(it) }
             .substring(0, 16)
         return File(context.filesDir, "repo-cache").apply { mkdirs() }.resolve("$digest.json")
+    }
+
+    private fun updatedFile(source: RepoSource): File {
+        val base = cacheFile(source)
+        return File(base.parentFile, "${base.name}.updated")
+    }
+
+    private fun readUpdatedAt(source: RepoSource): Long? =
+        runCatching { updatedFile(source).readText().toLongOrNull() }.getOrNull()
+
+    private fun writeUpdatedAt(source: RepoSource, timestamp: Long) {
+        runCatching { updatedFile(source).writeText(timestamp.toString()) }
     }
 
     private fun readCache(source: RepoSource): CachedRepo? {

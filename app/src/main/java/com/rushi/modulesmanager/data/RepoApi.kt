@@ -14,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -35,6 +36,23 @@ class RepoApi(private val client: OkHttpClient) {
         fetchWithFallback(source) { base ->
             RepoJson.parseModule(fetch(base.trimEnd('/') + "/module/$packageName.json"))
         }
+    }
+
+    /** Reads the newest commit time from a GitHub Atom feed, such as the data file's commits. */
+    suspend fun fetchUpdatedAt(url: String): Long? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/atom+xml")
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val xml = response.body?.string() ?: return@use null
+                UPDATED.find(xml)?.groupValues?.getOrNull(1)
+                    ?.let { Instant.parse(it.trim()).toEpochMilli() }
+            }
+        }.getOrNull()
     }
 
     private suspend fun fetchModulesFromBase(source: RepoSource, base: String): FetchedModules {
@@ -299,6 +317,8 @@ class RepoApi(private val client: OkHttpClient) {
 
     companion object {
         const val USER_AGENT = "ModulesManager/1.0 (Android)"
+
+        private val UPDATED = Regex("""<updated>(.*?)</updated>""")
 
         private const val PAGE_CONCURRENCY = 4
         private const val PAGE_RETRIES = 2

@@ -184,6 +184,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val refreshing: StateFlow<Boolean> = container.repo.refreshing
     val error: StateFlow<String?> = container.repo.error
     val lastUpdated: StateFlow<Long?> = container.repo.lastUpdated
+    val dataUpdatedAt: StateFlow<Long?> = container.repo.updatedAt
     val downloads: StateFlow<DownloadCenter.State?> = container.downloads.state
 
     private val _repoInstalled = MutableStateFlow<List<InstalledModule>>(emptyList())
