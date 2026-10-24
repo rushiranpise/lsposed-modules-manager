@@ -500,18 +500,11 @@ private fun ModuleCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         when {
-                            update != null -> {
-                                StatusPill(
-                                    text = "Update ${shortVersion(update.version.name)}",
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                                StatusPill(
-                                    text = "Installed ${shortVersion(update.installed.versionName)}".trim(),
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                            }
+                            update != null -> StatusPill(
+                                text = "v${shortVersion(update.installed.versionName)} \u2192 v${shortVersion(update.version.name)}",
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
                             installed != null -> StatusPill(
                                 text = "Installed ${shortVersion(installed.versionName)}".trim(),
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
