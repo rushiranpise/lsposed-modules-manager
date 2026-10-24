@@ -54,7 +54,7 @@ jobs:
         run: |
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           test -n "$APKSIGNER"
-          for APK in app/build/outputs/apk/release/app-*-release.apk; do
+          for APK in app/build/outputs/apk/release/app-release.apk; do
             echo "Verifying $APK"
             "$APKSIGNER" verify --print-certs "$APK"
           done
@@ -64,18 +64,8 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           rm -rf artifacts
           mkdir -p artifacts
-          for APK in app/build/outputs/apk/debug/app-*-debug.apk; do
-            NAME=$(basename "$APK")
-            ABI=${NAME#app-}
-            ABI=${ABI%-debug.apk}
-            cp "$APK" "artifacts/ModulesManager-${TAG}-debug-${ABI}.apk"
-          done
-          for APK in app/build/outputs/apk/release/app-*-release.apk; do
-            NAME=$(basename "$APK")
-            ABI=${NAME#app-}
-            ABI=${ABI%-release.apk}
-            cp "$APK" "artifacts/ModulesManager-${TAG}-release-${ABI}.apk"
-          done
+          cp app/build/outputs/apk/debug/app-debug.apk "artifacts/ModulesManager-${TAG}-debug.apk"
+          cp app/build/outputs/apk/release/app-release.apk "artifacts/ModulesManager-${TAG}-release.apk"
           PREVIOUS=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREVIOUS" ]; then RANGE="${PREVIOUS}..HEAD"; else RANGE="HEAD"; fi
           {
@@ -84,13 +74,10 @@ jobs:
             echo
             echo
             echo "## Downloads"
-            echo "Each APK contains one CPU architecture. Most phones need the arm64-v8a build."
+            echo "One APK works on every phone and emulator."
             echo
-            echo "- \`ModulesManager-${TAG}-release-arm64-v8a.apk\`: signed, 64-bit ARM phones"
-            echo "- \`ModulesManager-${TAG}-release-armeabi-v7a.apk\`: signed, 32-bit ARM phones"
-            echo "- \`ModulesManager-${TAG}-release-x86_64.apk\`: signed, x86_64 emulators"
-            echo "- \`ModulesManager-${TAG}-release-x86.apk\`: signed, x86 emulators"
-            echo "- \`ModulesManager-${TAG}-debug-<abi>.apk\`: debug builds, one per architecture"
+            echo "- \`ModulesManager-${TAG}-release.apk\`: signed release build"
+            echo "- \`ModulesManager-${TAG}-debug.apk\`: debug build"
           } > release-notes.md
 
       - name: Publish GitHub release

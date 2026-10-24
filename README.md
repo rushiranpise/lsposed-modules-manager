@@ -13,7 +13,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - See the installed version next to an available update.
 - Open a module to read its README, its full GitHub release history and target apps.
 - The Releases tab lists every published release, stable and pre-release, with their APKs.
-- Translate module descriptions and READMEs on device, manually or automatically.
+- Translate module descriptions and READMEs, manually or automatically.
 - Install with the system installer, a PackageInstaller session, Shizuku, or root for silent installs.
 - Long press an installed module to uninstall it.
 - The Installed tab lists every installed module, including ones missing from the index.
@@ -21,11 +21,11 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 
 ## Translation
 
-Translation runs on device with Google ML Kit, so no API key or account is needed.
+Translation goes through Google's public translate endpoint, so no API key or account is needed. The text leaves the device, and the endpoint needs a working network connection.
 
 - **Translate automatically** in Settings translates module descriptions when the list loads and the README when a module is opened.
 - **Language** picks the target language, or keeps the device language.
-- Each language pair downloads its model once, around 30 MB, and translations are cached per language.
+- Requests are batched, and translations are cached per language.
 - README translation rewrites only prose. Links, images, code blocks and inline code keep their exact syntax.
 - Rows whose description is already in the target language hide the translate icon.
 
@@ -38,7 +38,7 @@ Requires JDK 21 and Android SDK 37.
 ./gradlew :app:testDebugUnitTest
 ```
 
-Signed release APKs are built by the [release workflow](.github/workflows/release.yml) when a `v*` tag is pushed. The build is split by CPU architecture, so download the `arm64-v8a` APK for most phones.
+Signed release APKs are built by the [release workflow](.github/workflows/release.yml) when a `v*` tag is pushed. One APK covers every CPU architecture.
 
 ## Data
 

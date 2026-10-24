@@ -31,17 +31,6 @@ android {
         buildConfig = true
     }
 
-    // ML Kit's translation engine is about 16 MB per ABI, so each release ships one APK per
-    // architecture instead of a single APK that carries all of them.
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-            isUniversalApk = false
-        }
-    }
-
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
@@ -104,8 +93,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.commonmark:commonmark:0.31.0")
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.31.0")
-    implementation("com.google.mlkit:translate:17.0.3")
-    implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")

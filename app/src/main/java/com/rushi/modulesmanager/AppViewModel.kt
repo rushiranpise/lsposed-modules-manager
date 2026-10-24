@@ -290,11 +290,20 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
-            modules
-                .map { list -> list.map { it.packageName to it.summary.orEmpty() } }
+            // Detection goes through the network now, so it only runs when translation is on.
+            combine(settings.autoTranslate, modules) { auto, list -> auto to list }
                 .distinctUntilChanged()
-                .collect { entries ->
-                    val detected = TranslateApi.identifyAll(entries.map { it.second })
+                .collect { (auto, list) ->
+                    if (!auto) return@collect
+                    val entries = list.map { it.packageName to it.summary.orEmpty() }
+                    // A network failure must not take the app down with it.
+                    val detected = try {
+                        TranslateApi.detectAll(entries.map { it.second })
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        return@collect
+                    }
                     _descriptionLanguages.value = buildMap {
                         entries.forEachIndexed { index, (packageName, summary) ->
                             if (summary.isNotBlank()) {
@@ -1269,7 +1278,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val target = targetLanguage()
         try {
             val result = TranslateApi.translateTo(summary, target)
-            if (result.text == summary) {
+            result.sourceLanguage?.let { source ->
+                _descriptionLanguages.update { it + (module.packageName to source) }
+            }
+            if (TranslationLanguages.matches(result.sourceLanguage, target) ||
+                result.text.trim() == summary
+            ) {
                 _translations.update { it - module.packageName }
                 if (announce) message("This description is already in ${displayLanguage(target)}")
                 return
