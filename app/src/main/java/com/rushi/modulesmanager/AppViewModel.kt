@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -31,6 +32,7 @@ import com.rushi.modulesmanager.data.SortMode
 import com.rushi.modulesmanager.data.TranslateApi
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
+import com.rushi.modulesmanager.data.preferredAsset
 import com.rushi.modulesmanager.data.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -793,6 +795,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (info.packageName != module.packageName) {
             throw IllegalStateException("This release contains ${info.packageName}, not ${module.packageName}")
         }
+        if (info.minSdk > 0 && info.minSdk > Build.VERSION.SDK_INT) {
+            throw IllegalStateException(
+                "This APK needs Android API ${info.minSdk}, this device runs API ${Build.VERSION.SDK_INT}",
+            )
+        }
+        if (info.abis.isNotEmpty() && info.abis.none { it in Build.SUPPORTED_ABIS }) {
+            throw IllegalStateException(
+                "This APK is built for ${info.abis.joinToString()}, which this device cannot run",
+            )
+        }
         val installedPackage = _installedVersions.value[module.packageName]
         if (installedPackage != null) {
             if (info.versionCode < installedPackage.versionCode) {
@@ -929,7 +941,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     if (release == null || !release.matchesVersion(latest)) {
                                         throw IllegalStateException("Repository is serving an older release")
                                     }
-                                    val asset = release.apkAssets.firstOrNull()
+                                    val asset = release.preferredAsset()
                                         ?: throw IllegalStateException("No APK asset")
                                     updateBatchItem(packageName) { it.copy(total = asset.size) }
                                     val file = downloadApk(
@@ -1053,7 +1065,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 message("The repository is still serving an older release")
                 return@launch
             }
-            val asset = release?.apkAssets?.firstOrNull()
+            val asset = release?.preferredAsset()
             if (asset == null) {
                 message("No APK is available for ${module.displayName}")
                 return@launch

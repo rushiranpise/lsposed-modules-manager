@@ -85,6 +85,7 @@ import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.RepoRelease
 import com.rushi.modulesmanager.data.UpdateChannel
+import com.rushi.modulesmanager.data.preferredAsset
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.data.formatDate
 import com.rushi.modulesmanager.data.stripHtml
@@ -124,7 +125,7 @@ fun ModuleDetailScreen(
     }
     val update = updates.firstOrNull { it.installed.packageName == packageName }
     val release = module?.releaseFor(channel)
-    val primaryAsset = release?.apkAssets?.firstOrNull()
+    val primaryAsset = release?.preferredAsset()
     val latest = module?.latest(channel)
 
     LaunchedEffect(packageName) { viewModel.openModule(packageName) }

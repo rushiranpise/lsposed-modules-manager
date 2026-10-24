@@ -7,6 +7,7 @@ import android.content.pm.Signature
 import android.os.Build
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 object ApkInspector {
 
@@ -16,6 +17,10 @@ object ApkInspector {
         val versionCode: Long,
         val label: String?,
         val signatureDigest: String?,
+        val minSdk: Int = 0,
+        val targetSdk: Int = 0,
+        val abis: Set<String> = emptySet(),
+        val hasXposedDeclaration: Boolean = false,
     )
 
     fun inspect(context: Context, file: File): ApkInfo? {
@@ -33,12 +38,20 @@ object ApkInspector {
             @Suppress("DEPRECATION")
             info.versionCode.toLong()
         }
+        val meta = app?.metaData
         return ApkInfo(
             packageName = info.packageName,
             versionName = info.versionName,
             versionCode = versionCode,
             label = app?.let { runCatching { pm.getApplicationLabel(it).toString() }.getOrNull() },
             signatureDigest = signatureDigest(info),
+            minSdk = app?.minSdkVersion?.takeIf { it > 0 } ?: 0,
+            targetSdk = app?.targetSdkVersion?.takeIf { it > 0 } ?: 0,
+            abis = readAbis(file),
+            hasXposedDeclaration = meta?.containsKey("xposedmodule") == true ||
+                meta?.containsKey("xposedminversion") == true ||
+                info.providers?.any { it.name == XPOSED_PROVIDER } == true ||
+                hasModuleProp(file),
         )
     }
 
@@ -65,6 +78,22 @@ object ApkInspector {
             }
     }
 
+    private fun readAbis(file: File): Set<String> = runCatching {
+        ZipFile(file).use { zip ->
+            zip.entries().asSequence()
+                .filterNot { it.isDirectory }
+                .mapNotNull { entry ->
+                    val parts = entry.name.split('/')
+                    if (parts.size >= 3 && parts[0] == "lib") parts[1].takeIf(String::isNotBlank) else null
+                }
+                .toSet()
+        }
+    }.getOrDefault(emptySet())
+
+    private fun hasModuleProp(file: File): Boolean = runCatching {
+        ZipFile(file).use { it.getEntry(MODULE_PROP) != null }
+    }.getOrDefault(false)
+
     private fun signatureDigest(info: PackageInfo): String? {
         val signature: Signature? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             info.signingInfo?.apkContentsSigners?.firstOrNull()
@@ -75,4 +104,7 @@ object ApkInspector {
         val bytes = signature?.toByteArray() ?: return null
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
+
+    private const val MODULE_PROP = "META-INF/xposed/module.prop"
+    private const val XPOSED_PROVIDER = "io.github.libxposed.service.XposedProvider"
 }
