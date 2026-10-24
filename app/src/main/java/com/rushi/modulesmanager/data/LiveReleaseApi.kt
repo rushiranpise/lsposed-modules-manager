@@ -91,20 +91,26 @@ class LiveReleaseApi(
      * the newest release per channel, so the detail screen needs this to list release history.
      * Returns null when the ETag matched and the caller should keep what it already shows.
      */
-    suspend fun fetchAll(repoFullName: String): List<LiveRelease>? = try {
-        fetchAllFromApi(repoFullName)
+    suspend fun fetchAll(
+        repoFullName: String,
+        useCache: Boolean = true,
+    ): List<LiveRelease>? = try {
+        fetchAllFromApi(repoFullName, useCache)
     } catch (_: LiveUpdateRateLimitException) {
         fetchAllFromAtom(repoFullName)
     }
 
-    private suspend fun fetchAllFromApi(repoFullName: String): List<LiveRelease>? = withContext(Dispatchers.IO) {
+    private suspend fun fetchAllFromApi(
+        repoFullName: String,
+        useCache: Boolean,
+    ): List<LiveRelease>? = withContext(Dispatchers.IO) {
         val cacheKey = "all:$repoFullName"
         val request = Request.Builder()
             .url("${apiBase.trimEnd('/')}/repos/$repoFullName/releases?per_page=100")
             .header("User-Agent", RepoApi.USER_AGENT)
             .header("Accept", "application/vnd.github+json")
             .apply {
-                etags[cacheKey]?.let { header("If-None-Match", it) }
+                if (useCache) etags[cacheKey]?.let { header("If-None-Match", it) }
             }
             .build()
 

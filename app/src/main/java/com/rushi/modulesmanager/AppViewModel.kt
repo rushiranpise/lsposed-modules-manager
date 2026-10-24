@@ -674,7 +674,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 if (history.isNotEmpty() && _detail.value?.packageName == packageName) {
                     container.repo.applyReleaseHistory(packageName, history.map { it.toRepoRelease() })
-                    _detail.value = container.repo.cachedModule(packageName)
+                    // Manual links are not in the repository, so keep the detail they already have.
+                    container.repo.cachedModule(packageName)?.let { updated ->
+                        _detail.value = updated
+                    }
                 }
             }
 
@@ -859,7 +862,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Builds a module from a GitHub repository's releases for a manually linked package. */
     private suspend fun loadManualModule(packageName: String, repoFullName: String): RepoModule? =
         runCatching {
-            val releases = container.liveApi.fetchAll(repoFullName).orEmpty()
+            // A manual link must load even when the cached ETag says the releases are unchanged.
+            val releases = container.liveApi.fetchAll(repoFullName, useCache = false).orEmpty()
             if (releases.isEmpty()) return@runCatching null
             val mapped = releases.map { it.toRepoRelease() }
             val stable = mapped.filter { !it.isPrerelease && !it.isSnapshot }
@@ -912,6 +916,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private suspend fun loadDetailedModule(packageName: String): RepoModule? {
         _manualModules.value[packageName]?.let { return it }
         val linkedRepo = container.moduleState.links.value[packageName]
+
         if (linkedRepo != null) {
             val module = loadManualModule(packageName, linkedRepo) ?: return null
             loadedManualLinks += "$packageName|$linkedRepo"

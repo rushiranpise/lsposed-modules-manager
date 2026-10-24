@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -83,6 +84,19 @@ class LiveReleaseApiTest {
             "/repos/example/module/releases?per_page=100",
             server.takeRequest().path,
         )
+    }
+
+    @Test
+    fun `manual links bypass the release etag`() = runBlocking {
+        server.enqueue(MockResponse().setBody(RELEASES).addHeader("ETag", "\"v1\""))
+        server.enqueue(MockResponse().setBody(RELEASES))
+        val api = api()
+
+        api.fetchAll("example/module")
+        assertNull(server.takeRequest().getHeader("If-None-Match"))
+
+        api.fetchAll("example/module", useCache = false)
+        assertNull(server.takeRequest().getHeader("If-None-Match"))
     }
 
     @Test
