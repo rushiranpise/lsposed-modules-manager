@@ -155,8 +155,10 @@ fun InstalledScreen(
         )
     }
 
+    // Skip the first run so returning from a module page keeps the scroll position.
+    var filtersReady by remember { mutableStateOf(false) }
     LaunchedEffect(query, filter) {
-        listState.scrollToItem(0)
+        if (filtersReady) listState.scrollToItem(0) else filtersReady = true
     }
 
     Scaffold(

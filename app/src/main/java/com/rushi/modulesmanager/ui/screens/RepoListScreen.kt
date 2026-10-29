@@ -142,8 +142,21 @@ fun RepoListScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    // Skip the first run so returning from a module page keeps the scroll position.
+    var filtersReady by remember { mutableStateOf(false) }
     LaunchedEffect(query, filter, sortMode, updatesFirst, channel) {
-        listState.scrollToItem(0)
+        if (filtersReady) listState.scrollToItem(0) else filtersReady = true
+    }
+
+    // A new index file means the restored position belongs to older data.
+    var lastDataStamp by rememberSaveable { mutableStateOf<Long?>(null) }
+    LaunchedEffect(dataUpdatedAt) {
+        val stamp = dataUpdatedAt ?: return@LaunchedEffect
+        val previous = lastDataStamp
+        if (previous != null && stamp != previous) {
+            listState.scrollToItem(0)
+        }
+        lastDataStamp = stamp
     }
 
     val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
