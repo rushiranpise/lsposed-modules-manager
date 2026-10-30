@@ -99,6 +99,8 @@ import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.shortVersion
+import com.rushi.modulesmanager.ui.theme.amoledCardBorder
+import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 
 private val tabs = listOf("Overview", "Releases", "Information")
 
@@ -715,7 +717,8 @@ private fun ReleaseCard(
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
+        border = amoledCardBorder(),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {

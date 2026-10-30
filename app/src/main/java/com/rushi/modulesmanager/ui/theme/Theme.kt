@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -12,10 +13,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
@@ -74,6 +78,17 @@ private val DarkColors = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6),
 )
 
+val LocalAmoled = staticCompositionLocalOf { false }
+
+/** Cards go fully black in AMOLED mode and gain a hairline outline. */
+@Composable
+fun amoledCardContainerColor(): Color =
+    if (LocalAmoled.current) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+
+@Composable
+fun amoledCardBorder(): BorderStroke? =
+    if (LocalAmoled.current) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+
 // Keep the active accents, including Material You ones, but turn the surfaces off.
 private fun ColorScheme.withAmoledSurfaces(): ColorScheme = copy(
     background = Color.Black,
@@ -111,7 +126,9 @@ fun ModulesManagerTheme(
             isAppearanceLightNavigationBars = !darkTheme
         }
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    CompositionLocalProvider(LocalAmoled provides (darkTheme && amoled)) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }
 
 private fun Context.findActivity(): Activity? = when (this) {

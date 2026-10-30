@@ -54,6 +54,8 @@ import com.rushi.modulesmanager.BuildConfig
 import com.rushi.modulesmanager.data.AppStorage
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.HeaderDivider
+import com.rushi.modulesmanager.ui.theme.amoledCardBorder
+import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -141,8 +143,9 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = amoledCardContainerColor(),
                 ),
+                border = amoledCardBorder(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(

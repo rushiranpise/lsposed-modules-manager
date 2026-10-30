@@ -87,6 +87,8 @@ import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
+import com.rushi.modulesmanager.ui.theme.amoledCardBorder
+import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 import kotlinx.coroutines.launch
 
 private enum class InstalledFilter { ALL, UPDATES, SKIPPED, UNTRACKED }
@@ -513,7 +515,8 @@ private fun InstalledCard(
     var menuOpen by remember { mutableStateOf(false) }
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
+        border = amoledCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -813,7 +816,8 @@ private fun BatchProgressCard(
     val firstFailure = failedItems.firstOrNull()
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
+        border = amoledCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),

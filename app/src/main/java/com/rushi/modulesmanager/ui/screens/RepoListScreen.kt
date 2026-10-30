@@ -101,6 +101,8 @@ import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
+import com.rushi.modulesmanager.ui.theme.amoledCardBorder
+import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -527,8 +529,9 @@ private fun ModuleShelf(
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        containerColor = amoledCardContainerColor(),
                     ),
+                    border = amoledCardBorder(),
                     modifier = Modifier
                         .width(158.dp)
                         .clickable { onOpen(module.packageName) },
@@ -697,7 +700,8 @@ internal fun ModuleCard(
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
+        border = amoledCardBorder(),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(14.dp)) {
