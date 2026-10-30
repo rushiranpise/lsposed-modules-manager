@@ -35,6 +35,8 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -122,6 +124,7 @@ fun ModuleDetailScreen(
         context.packageManager.getLaunchIntentForPackage(packageName) != null
     }
     val update = updates.firstOrNull { it.installed.packageName == packageName }
+    val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val release = module?.releaseFor(channel)
     val primaryAsset = release?.preferredAsset()
     val latest = module?.latest(channel)
@@ -142,6 +145,25 @@ fun ModuleDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.toggleFavourite(packageName) }) {
+                        Icon(
+                            imageVector = if (packageName in favourites) {
+                                Icons.Outlined.Star
+                            } else {
+                                Icons.Outlined.StarBorder
+                            },
+                            contentDescription = if (packageName in favourites) {
+                                "Remove from favourites"
+                            } else {
+                                "Add to favourites"
+                            },
+                            tint = if (packageName in favourites) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                LocalContentColor.current
+                            },
+                        )
+                    }
                     if (tab == 0 && module != null) {
                         val translating = readmeTranslation?.loading == true
                         val translated = readmeTranslation?.html != null

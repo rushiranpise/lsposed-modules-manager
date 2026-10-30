@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
@@ -54,6 +55,7 @@ import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.DownloadBanner
 import com.rushi.modulesmanager.ui.screens.DiagnosticsScreen
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
+import com.rushi.modulesmanager.ui.screens.LibraryScreen
 import com.rushi.modulesmanager.ui.screens.ModuleDetailScreen
 import com.rushi.modulesmanager.ui.screens.RepoListScreen
 import com.rushi.modulesmanager.ui.screens.SettingsScreen
@@ -61,6 +63,7 @@ import com.rushi.modulesmanager.ui.screens.SettingsScreen
 private enum class Destination(val route: String, val label: String, val icon: ImageVector) {
     MODULES("modules", "Modules", Icons.Outlined.Extension),
     INSTALLED("installed", "Installed", Icons.Outlined.Apps),
+    LIBRARY("library", "Library", Icons.Outlined.Bookmarks),
     SETTINGS("settings", "Settings", Icons.Outlined.Settings),
 }
 
@@ -266,6 +269,12 @@ private fun AppNavHost(
         }
         composable(Destination.INSTALLED.route) {
             InstalledScreen(
+                viewModel = viewModel,
+                onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+            )
+        }
+        composable(Destination.LIBRARY.route) {
+            LibraryScreen(
                 viewModel = viewModel,
                 onOpenModule = { packageName -> navController.navigate("module/$packageName") },
             )
