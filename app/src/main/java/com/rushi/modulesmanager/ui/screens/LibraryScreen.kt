@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -33,6 +34,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
@@ -42,9 +45,9 @@ import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.ui.components.EmptyState
 
-private enum class LibraryTab(val label: String) {
-    FAVOURITES("Favourites"),
-    RECENT("Recent"),
+private enum class LibraryTab(val label: String, val icon: ImageVector) {
+    FAVOURITES("Favourites", Icons.Outlined.FavoriteBorder),
+    RECENT("Recent", Icons.Outlined.History),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,6 +125,13 @@ fun LibraryScreen(
                             inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                             inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
+                        icon = {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
                         label = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -130,15 +140,24 @@ fun LibraryScreen(
                                 Text(item.label)
                                 Surface(
                                     shape = CircleShape,
-                                    color = LocalContentColor.current.copy(alpha = 0.15f),
-                                    contentColor = LocalContentColor.current,
+                                    color = if (selectedTab.ordinal == index) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                    },
+                                    contentColor = if (selectedTab.ordinal == index) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                 ) {
                                     Text(
                                         text = tabCounts[index].toString(),
                                         style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.padding(
-                                            horizontal = 6.dp,
-                                            vertical = 1.dp,
+                                            horizontal = 7.dp,
+                                            vertical = 2.dp,
                                         ),
                                     )
                                 }
