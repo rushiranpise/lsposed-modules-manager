@@ -778,9 +778,9 @@ internal fun ModuleCard(
                                     ).show()
                                 },
                             )
-                            module.url?.let { url ->
+                            module.releasesPageUrl()?.let { url ->
                                 DropdownMenuItem(
-                                    text = { Text("Open release page") },
+                                    text = { Text("Open releases page") },
                                     onClick = {
                                         menuOpen = false
                                         onOpenRelease(url)

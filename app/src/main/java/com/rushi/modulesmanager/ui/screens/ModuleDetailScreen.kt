@@ -215,11 +215,11 @@ fun ModuleDetailScreen(
                             }
                         }
                     }
-                    module?.url?.let { url ->
+                    module?.releasesPageUrl()?.let { url ->
                         IconButton(onClick = { viewModel.openLink(url) }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                contentDescription = "Open release page",
+                                contentDescription = "Open releases page",
                             )
                         }
                     }

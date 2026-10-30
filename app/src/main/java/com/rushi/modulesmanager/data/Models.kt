@@ -203,6 +203,17 @@ data class RepoModule(
         return null
     }
 
+    /** GitHub releases list for this module, never a single tag or asset URL. */
+    fun releasesPageUrl(): String? {
+        githubRepoFullName()?.let { repo ->
+            return "https://github.com/$repo/releases"
+        }
+        val candidate = url ?: homepageUrl ?: sourceUrl ?: return null
+        val match = Regex("github\\.com/([^/]+)/([^/?#]+)", RegexOption.IGNORE_CASE)
+            .find(candidate) ?: return null
+        return "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}/releases"
+    }
+
     /** Replaces the index source with a repository the user chose. */
     fun withSourceOverride(repoFullName: String): RepoModule {
         val owner = repoFullName.substringBefore('/')
