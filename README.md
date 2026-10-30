@@ -13,6 +13,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Cards now show an outlined package pill, a gold star count, a gray fork count, a red favourite heart and a source badge when the index lists several repositories.
 - Long descriptions expand with **Read more**. The card menu can copy the package name, open the releases list or open the developer page.
 - Module pages use Material 3 segmented tabs, show the author below the release date, and add an **Uninstall** action for installed modules.
+- Release notes in the Releases tab render as formatted Markdown, with headings, lists, emphasis and code blocks.
 - AMOLED mode uses fully black cards, navigation pill and download banner with a hairline outline.
 - The Modules list reports when the index was last updated on launch and after a refresh.
 - Green version pills, gold star accents and outlined package pills throughout the app.
