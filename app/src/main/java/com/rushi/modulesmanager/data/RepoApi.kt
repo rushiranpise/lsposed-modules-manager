@@ -18,7 +18,10 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-class RepoApi(private val client: OkHttpClient) {
+class RepoApi(
+    private val client: OkHttpClient,
+    private val retry: DownloadRetry = DownloadRetry(),
+) {
 
     data class FetchedModules(val rawJson: String, val modules: List<RepoModule>, val baseUrl: String)
 
@@ -222,20 +225,39 @@ class RepoApi(private val client: OkHttpClient) {
 
     /**
      * Downloads one URL, continuing a previous `.part` file with HTTP Range when possible.
-     * A server that ignores the range (200) restarts the file, and a 416 retries once from zero.
+     * A server that ignores the range (200) restarts the file, and a 416 retries once from
+     * zero. A transfer that dies mid-stream is retried on the same URL, continuing from the
+     * bytes already on disk instead of starting over.
      */
-    private fun downloadOnce(
+    private suspend fun downloadOnce(
         url: String,
         destination: File,
         onProgress: (downloaded: Long, total: Long) -> Unit,
     ): File {
         destination.parentFile?.mkdirs()
         val partial = File(destination.parentFile, destination.name + ".part")
-        val resumed = fetchInto(url, partial, resume = true, onProgress)
-        if (resumed == null) {
-            // 416: the leftover bytes are not usable, start clean once.
-            partial.delete()
-            fetchInto(url, partial, resume = false, onProgress)
+        var attempt = 1
+        while (true) {
+            try {
+                val resumed = fetchInto(
+                    url,
+                    partial,
+                    resume = partial.length() > 0L,
+                    onProgress,
+                )
+                if (resumed == null) {
+                    // 416 or a range that no longer matches: start clean once.
+                    partial.delete()
+                    fetchInto(url, partial, resume = false, onProgress)
+                }
+                break
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                if (!retry.canRetry(attempt, e)) throw e
+                attempt++
+                if (!retry.awaitNextAttempt(attempt)) throw e
+            }
         }
 
         if (destination.exists()) destination.delete()
@@ -262,7 +284,7 @@ class RepoApi(private val client: OkHttpClient) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 416 && existing > 0L) return null
-            if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
+            if (!response.isSuccessful) throw HttpStatusException(response.code)
             val body = response.body ?: throw IOException("Download failed: empty response")
 
             val appending = response.code == 206 && existing > 0L
@@ -298,6 +320,11 @@ class RepoApi(private val client: OkHttpClient) {
                         }
                     }
                 }
+            }
+            // A proxy or server that closes exactly on a packet boundary ends the body
+            // quietly. Treat the short file as a dropped transfer so the retry resumes it.
+            if (total > 0L && downloaded < total) {
+                throw IOException("Incomplete download: $downloaded of $total bytes")
             }
             onProgress(downloaded, if (total > 0) total else downloaded)
         }

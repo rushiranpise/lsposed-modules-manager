@@ -91,6 +91,48 @@ class RepoApiTest {
         assertTrue(directory.deleteRecursively())
     }
 
+    @Test
+    fun `retries a transient server error on the same url`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setBody("apk-bytes"))
+        val directory = Files.createTempDirectory("modules-manager-retry").toFile()
+        val destination = File(directory, "example.apk")
+        val api = RepoApi(RepoApi.createClient(), DownloadRetry(sleep = { _ -> }))
+
+        val file = api.download(
+            listOf(server.url("/asset.apk").toString()),
+            destination,
+        ) { _, _ -> }
+
+        assertEquals("apk-bytes", file.readText())
+        assertEquals(2, server.requestCount)
+        assertEquals("/asset.apk", server.takeRequest().path)
+        assertEquals("/asset.apk", server.takeRequest().path)
+        assertTrue(directory.deleteRecursively())
+    }
+
+    @Test
+    fun `resumes a partial file with a range request`() = runBlocking {
+        val directory = Files.createTempDirectory("modules-manager-resume").toFile()
+        val destination = File(directory, "example.apk")
+        File(directory, "example.apk.part").writeText("apk-")
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(206)
+                .setHeader("Content-Range", "bytes 4-8/9")
+                .setBody("bytes"),
+        )
+
+        val file = api().download(
+            listOf(server.url("/asset.apk").toString()),
+            destination,
+        ) { _, _ -> }
+
+        assertEquals("apk-bytes", file.readText())
+        assertEquals("bytes=4-", server.takeRequest().getHeader("Range"))
+        assertTrue(directory.deleteRecursively())
+    }
+
     private companion object {
         val REPOS_JSON = """
             [

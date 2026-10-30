@@ -2,7 +2,9 @@ package com.rushi.modulesmanager
 
 import android.app.Application
 import android.content.Context
+import com.rushi.modulesmanager.data.AndroidNetworkMonitor
 import com.rushi.modulesmanager.data.DownloadCenter
+import com.rushi.modulesmanager.data.DownloadRetry
 import com.rushi.modulesmanager.data.InstalledModuleScanner
 import com.rushi.modulesmanager.data.LiveReleaseApi
 import com.rushi.modulesmanager.data.ModuleStateStore
@@ -18,7 +20,10 @@ class AppContainer(context: Context) {
     val moduleState = ModuleStateStore(appContext)
     val pendingInstalls = PendingInstalls.get(appContext)
     val batchState = BatchStateStore(appContext)
-    val api = RepoApi(RepoApi.createClient())
+    val api = RepoApi(
+        RepoApi.createClient(),
+        DownloadRetry(network = AndroidNetworkMonitor(appContext)),
+    )
     val liveApi = LiveReleaseApi(RepoApi.createClient())
     val readmeApi = ReadmeApi(RepoApi.createClient())
     val repo = RepoRepository(appContext, api, moduleState)
