@@ -2,8 +2,9 @@
 
 An Android app for finding, installing and updating Xposed/Lsposed modules.
 
-- Package: `com.rushi.modulesmanager`
+- Package: `io.github.rushiranpise.modulesmanager`
 - Android 8.1 (API 26) and newer
+- Versions up to 2.0.0 used `com.rushi.modulesmanager` and update separately.
 - ⬇️ [Latest release](https://github.com/rushiranpise/lsposed-modules-manager/releases)
 
 ## What's new in 2.0

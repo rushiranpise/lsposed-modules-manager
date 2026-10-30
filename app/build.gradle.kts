@@ -29,11 +29,11 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.rushi.modulesmanager"
+        applicationId = "io.github.rushiranpise.modulesmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.0.0"
+        versionCode = 9
+        versionName = "2.1.0"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
     }
 
