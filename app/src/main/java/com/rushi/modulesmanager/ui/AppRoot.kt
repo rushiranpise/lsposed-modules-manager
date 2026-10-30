@@ -1,6 +1,14 @@
 package com.rushi.modulesmanager.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +16,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,12 +32,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -35,8 +47,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -96,40 +113,18 @@ fun AppRoot(viewModel: AppViewModel) {
     }
 
     BoxWithConstraints {
-        // A rail on tablets and other wide windows; phones keep the bottom bar.
+        // A rail on tablets and other wide windows; phones float a pill over the content.
         val wide = maxWidth >= 600.dp
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                if (!wide) {
-                    Column {
-                        download?.let { state ->
-                            DownloadBanner(
-                                state = state,
-                                onCancel = viewModel::cancelDownload,
-                                onPause = viewModel::pauseDownload,
-                                onResume = viewModel::resumeDownload,
-                            )
-                        }
-                        if (showBottomBar) {
-                            NavigationBar {
-                                Destination.entries.forEach { destination ->
-                                    NavigationBarItem(
-                                        selected = currentRoute == destination.route,
-                                        onClick = {
-                                            navController.navigateTopLevel(destination.route)
-                                        },
-                                        icon = { DestinationIcon(destination, installed.size) },
-                                        label = { Text(destination.label) },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-        ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                snackbarHost = {
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier.padding(bottom = if (wide) 0.dp else 96.dp),
+                    )
+                },
+            ) { padding ->
             if (wide) {
                 Column(
                     modifier = Modifier
@@ -172,6 +167,43 @@ fun AppRoot(viewModel: AppViewModel) {
                     viewModel = viewModel,
                     modifier = Modifier.padding(padding),
                 )
+            }
+            }
+            if (!wide) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                ) {
+                    if (!showBottomBar) {
+                        download?.let { state ->
+                            Box(modifier = Modifier.navigationBarsPadding()) {
+                                DownloadBanner(
+                                    state = state,
+                                    onCancel = viewModel::cancelDownload,
+                                    onPause = viewModel::pauseDownload,
+                                    onResume = viewModel::resumeDownload,
+                                )
+                            }
+                        }
+                    } else {
+                        download?.let { state ->
+                            DownloadBanner(
+                                state = state,
+                                onCancel = viewModel::cancelDownload,
+                                onPause = viewModel::pauseDownload,
+                                onResume = viewModel::resumeDownload,
+                            )
+                        }
+                        FloatingNavBar(
+                            currentRoute = currentRoute,
+                            installedCount = installed.size,
+                            onSelect = { destination ->
+                                navController.navigateTopLevel(destination.route)
+                            },
+                        )
+                    }
+                }
             }
         }
     }
@@ -231,7 +263,109 @@ fun AppRoot(viewModel: AppViewModel) {
 }
 
 @Composable
-private fun DestinationIcon(destination: Destination, installedCount: Int) {
+private fun FloatingNavBar(
+    currentRoute: String?,
+    installedCount: Int,
+    onSelect: (Destination) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Drawn before the insets so the fade reaches the bottom of the screen, not the top
+            // of the gesture area. The page under the pill fades into the background instead of
+            // ending on a hard edge.
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    1f to MaterialTheme.colorScheme.surfaceContainer,
+                ),
+            )
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            tonalElevation = 0.dp,
+            shadowElevation = 6.dp,
+        ) {
+            Row(
+                modifier = Modifier
+                    .selectableGroup()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Destination.entries.forEach { destination ->
+                    FloatingNavItem(
+                        destination = destination,
+                        selected = currentRoute == destination.route,
+                        installedCount = installedCount,
+                        onClick = { onSelect(destination) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingNavItem(
+    destination: Destination,
+    selected: Boolean,
+    installedCount: Int,
+    onClick: () -> Unit,
+) {
+    val container by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            Color.Transparent
+        },
+        label = "navItemContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        label = "navItemContent",
+    )
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(container)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DestinationIcon(destination, installedCount, tint = content)
+        AnimatedVisibility(
+            visible = selected,
+            enter = expandHorizontally() + fadeIn(),
+            exit = shrinkHorizontally() + fadeOut(),
+        ) {
+            Text(
+                text = destination.label,
+                color = content,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationIcon(
+    destination: Destination,
+    installedCount: Int,
+    tint: Color? = null,
+) {
+    val iconTint = tint ?: LocalContentColor.current
     if (destination == Destination.INSTALLED && installedCount > 0) {
         BadgedBox(
             badge = {
@@ -243,10 +377,10 @@ private fun DestinationIcon(destination: Destination, installedCount: Int) {
                 }
             },
         ) {
-            Icon(destination.icon, contentDescription = null)
+            Icon(destination.icon, contentDescription = null, tint = iconTint)
         }
     } else {
-        Icon(destination.icon, contentDescription = null)
+        Icon(destination.icon, contentDescription = null, tint = iconTint)
     }
 }
 

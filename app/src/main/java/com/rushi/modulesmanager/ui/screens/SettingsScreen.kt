@@ -103,7 +103,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp),
+                .padding(bottom = 120.dp),
         ) {
             SectionTitle("Appearance")
             SettingsSwitchRow(
