@@ -302,6 +302,7 @@ fun ModuleDetailScreen(
                             inactiveContainerColor = amoledCardContainerColor(),
                             inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
+                        icon = {},
                         label = { Text(title) },
                     )
                 }
@@ -477,16 +478,6 @@ private fun DetailHeader(
                 )
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
-                module.developerLogin()?.let { developer ->
-                    Text(
-                        text = "by $developer",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(top = 3.dp)
-                            .clickable { onOpenDeveloper(developer) },
-                    )
-                }
                 Spacer(Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -494,6 +485,16 @@ private fun DetailHeader(
                 ) {
                     StarBadge(module.stargazerCount)
                     if (latestDate != null) StatusPill(text = latestDate)
+                }
+                module.developerLogin()?.let { developer ->
+                    Text(
+                        text = "by $developer",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clickable { onOpenDeveloper(developer) },
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
