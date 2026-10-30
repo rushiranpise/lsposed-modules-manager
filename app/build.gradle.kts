@@ -32,8 +32,8 @@ android {
         applicationId = "com.rushi.modulesmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.1.5"
+        versionCode = 8
+        versionName = "2.0.0"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
     }
 
