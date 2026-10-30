@@ -97,6 +97,7 @@ import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
+import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.shortVersion
 
 private val tabs = listOf("Overview", "Releases", "Information")
@@ -482,15 +483,11 @@ private fun DetailHeader(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
-                        hasUpdate -> StatusPill(
+                        hasUpdate -> VersionPill(
                             text = "v${installedVersion.orEmpty()} \u2192 v${shortVersion(updateVersion.name)}",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
-                        isInstalled -> StatusPill(
+                        isInstalled -> VersionPill(
                             text = "Installed v${shortVersion(installedVersion)}",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
                 }
