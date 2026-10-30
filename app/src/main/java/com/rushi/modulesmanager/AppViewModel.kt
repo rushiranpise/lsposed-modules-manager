@@ -87,7 +87,7 @@ data class VariantChoice(
     val assets: List<RepoAsset>,
 )
 
-enum class BatchPhase { QUEUED, DOWNLOADING, WAITING_TO_INSTALL, INSTALLING, COMPLETED, FAILED }
+enum class BatchPhase { QUEUED, DOWNLOADING, WAITING_TO_INSTALL, INSTALLING, COMPLETED, FAILED, CANCELLED }
 
 data class BatchItemState(
     val title: String,
@@ -107,7 +107,9 @@ data class BatchUpdateState(
 ) {
     val finished: Int
         get() = items.values.count {
-            it.phase == BatchPhase.COMPLETED || it.phase == BatchPhase.FAILED
+            it.phase == BatchPhase.COMPLETED ||
+                it.phase == BatchPhase.FAILED ||
+                it.phase == BatchPhase.CANCELLED
         }
 }
 
@@ -236,6 +238,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var downloadJob: Job? = null
     private var batchJob: Job? = null
     private var batchPersisting = false
+    private val batchItemJobs = mutableMapOf<String, Job>()
+    private val batchItemFiles = mutableMapOf<String, File>()
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
     private var liveCheckJob: Job? = null
@@ -1210,7 +1214,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val pendingPackages = container.pendingInstalls.all().map { it.packageName }.toSet()
         val items = stored.items.mapValues { (packageName, item) ->
             when {
-                item.phase == BatchPhase.COMPLETED || item.phase == BatchPhase.FAILED -> item
+                item.phase == BatchPhase.COMPLETED ||
+                    item.phase == BatchPhase.FAILED ||
+                    item.phase == BatchPhase.CANCELLED -> item
                 item.phase == BatchPhase.INSTALLING && packageName in pendingPackages -> item
                 else -> item.copy(
                     phase = BatchPhase.FAILED,
@@ -1262,6 +1268,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 it.module.packageName to BatchItemState(it.module.displayName, BatchPhase.QUEUED)
             },
         )
+        batchItemJobs.clear()
+        batchItemFiles.clear()
         batchJob = viewModelScope.launch {
             val failures = java.util.Collections.synchronizedList(mutableListOf<String>())
             val queue = Channel<PreparedInstall>(Channel.UNLIMITED)
@@ -1269,8 +1277,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 coroutineScope {
                     val slots = Semaphore(3)
                     val downloads = targets.map { update ->
-                        launch {
-                            val packageName = update.module.packageName
+                        val packageName = update.module.packageName
+                        val job = launch {
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.DOWNLOADING) }
                             slots.withPermit {
                                 try {
@@ -1290,18 +1298,28 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     val asset = remembered ?: release.preferredAsset()
                                         ?: throw IllegalStateException("No APK asset")
                                     updateBatchItem(packageName) { it.copy(total = asset.size) }
+                                    val destination = apkDestination(appContext, update.module, asset)
+                                    batchItemFiles[packageName] = destination
                                     val file = downloadApk(
                                         appContext,
                                         update.module,
                                         asset,
-                                        apkDestination(appContext, update.module, asset),
+                                        destination,
                                     ) { downloaded, total ->
-                                        updateBatchItem(packageName) {
-                                            it.copy(
-                                                downloaded = downloaded,
-                                                total = if (total > 0L) total else it.total,
-                                            )
+                                        if (batchPhase(packageName) != BatchPhase.CANCELLED) {
+                                            updateBatchItem(packageName) {
+                                                it.copy(
+                                                    downloaded = downloaded,
+                                                    total = if (total > 0L) total else it.total,
+                                                )
+                                            }
                                         }
+                                    }
+                                    // A blocking transfer can outlive the cancel by a few reads.
+                                    if (batchPhase(packageName) == BatchPhase.CANCELLED) {
+                                        file.delete()
+                                        File(file.path + ".part").delete()
+                                        return@withPermit
                                     }
                                     updateBatchItem(packageName) {
                                         it.copy(
@@ -1313,20 +1331,30 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
-                                    val reason = e.userMessage()
-                                    failures += "${update.module.displayName}: $reason"
-                                    updateBatchItem(packageName) {
-                                        it.copy(phase = BatchPhase.FAILED, error = reason)
+                                    val cancelled = batchPhase(packageName) == BatchPhase.CANCELLED
+                                    if (!cancelled) {
+                                        val reason = e.userMessage()
+                                        failures += "${update.module.displayName}: $reason"
+                                        updateBatchItem(packageName) {
+                                            it.copy(phase = BatchPhase.FAILED, error = reason)
+                                        }
                                     }
                                 }
                             }
                         }
+                        batchItemJobs[packageName] = job
+                        job
                     }
 
                     val installer = launch {
                         for (prepared in queue) {
                             val update = prepared.update
                             val packageName = update.module.packageName
+                            // A row cancelled while its download was already queued.
+                            if (batchPhase(packageName) == BatchPhase.CANCELLED) {
+                                prepared.file.delete()
+                                continue
+                            }
                             _batchUpdate.update {
                                 it?.copy(current = update.module.displayName)
                             }
@@ -1390,18 +1418,52 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             } finally {
                 batchPersisting = false
                 queue.cancel()
-                _batchUpdate.update { it?.copy(running = false, current = null) }
+                batchItemJobs.clear()
+                batchItemFiles.clear()
+                // Keep only failures so their row can explain what went wrong; completed and
+                // cancelled rows go back to looking like ordinary modules.
+                _batchUpdate.update { state ->
+                    state?.copy(
+                        running = false,
+                        current = null,
+                        items = state.items.filterValues { it.phase == BatchPhase.FAILED },
+                    )
+                }
                 container.batchState.clear()
             }
+        }
+    }
+
+    /** Stops one row while the rest of the batch keeps running. */
+    fun cancelBatchItem(packageName: String) {
+        val item = _batchUpdate.value?.items?.get(packageName) ?: return
+        if (item.phase != BatchPhase.QUEUED &&
+            item.phase != BatchPhase.DOWNLOADING &&
+            item.phase != BatchPhase.WAITING_TO_INSTALL
+        ) {
+            return
+        }
+        batchItemJobs.remove(packageName)?.cancel()
+        batchItemFiles.remove(packageName)?.let { file ->
+            file.delete()
+            File(file.path + ".part").delete()
+        }
+        updateBatchItem(packageName) {
+            it.copy(phase = BatchPhase.CANCELLED, error = null)
         }
     }
 
     fun cancelBatch() {
         batchPersisting = false
         batchJob?.cancel()
+        batchItemJobs.clear()
+        batchItemFiles.clear()
         _batchUpdate.update { it?.copy(running = false, current = null) }
         container.batchState.clear()
     }
+
+    private fun batchPhase(packageName: String): BatchPhase? =
+        _batchUpdate.value?.items?.get(packageName)?.phase
 
     private fun updateBatchItem(
         packageName: String,

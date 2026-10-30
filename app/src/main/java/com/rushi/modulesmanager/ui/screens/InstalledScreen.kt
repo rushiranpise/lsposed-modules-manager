@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreVert
@@ -65,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
+import com.rushi.modulesmanager.BatchItemState
 import com.rushi.modulesmanager.BatchPhase
 import com.rushi.modulesmanager.BatchUpdateState
 import com.rushi.modulesmanager.ModuleUpdate
@@ -306,6 +308,10 @@ fun InstalledScreen(
                                 module = module,
                                 repoModule = repoModule,
                                 update = updatesByPackage[module.packageName],
+                                batchItem = batch?.items?.get(module.packageName),
+                                onCancelItem = {
+                                    viewModel.cancelBatchItem(module.packageName)
+                                },
                                 ignored = module.packageName in ignoredUpdates ||
                                     (repoModule != null && repoModule.packageName in ignoredUpdates),
                                 skippedVersion = repoModule?.let { skippedVersions[it.packageName] },
@@ -437,6 +443,8 @@ private fun InstalledCard(
     module: InstalledModule,
     repoModule: RepoModule?,
     update: ModuleUpdate?,
+    batchItem: BatchItemState?,
+    onCancelItem: () -> Unit,
     ignored: Boolean,
     skippedVersion: String?,
     preReleases: Boolean,
@@ -627,7 +635,12 @@ private fun InstalledCard(
                             else -> StatusPill(text = "Not in repository")
                         }
                     }
-                    if (update != null) {
+                    val batchActive = batchItem != null &&
+                        (batchItem.phase == BatchPhase.QUEUED ||
+                            batchItem.phase == BatchPhase.DOWNLOADING ||
+                            batchItem.phase == BatchPhase.WAITING_TO_INSTALL ||
+                            batchItem.phase == BatchPhase.INSTALLING)
+                    if (update != null && !batchActive) {
                         Spacer(Modifier.width(8.dp))
                         FilledTonalButton(
                             onClick = { onUpdate(update) },
@@ -644,6 +657,77 @@ private fun InstalledCard(
                         }
                     }
                 }
+                batchItem?.let { item -> BatchItemProgress(item, onCancelItem) }
+            }
+        }
+    }
+}
+
+/** One update's own transfer/install state, with a cancel action while it can still stop. */
+@Composable
+private fun BatchItemProgress(item: BatchItemState, onCancel: () -> Unit) {
+    if (item.phase == BatchPhase.FAILED) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = item.error ?: "Update failed",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+    val fraction = when {
+        item.phase == BatchPhase.WAITING_TO_INSTALL -> 1f
+        item.total > 0L -> (item.downloaded.toFloat() / item.total).coerceIn(0f, 1f)
+        else -> null
+    }
+    val label = when (item.phase) {
+        BatchPhase.QUEUED -> "Queued"
+        BatchPhase.DOWNLOADING -> "Downloading"
+        BatchPhase.WAITING_TO_INSTALL -> "Waiting to install"
+        BatchPhase.INSTALLING -> "Installing"
+        BatchPhase.CANCELLED -> "Cancelled"
+        else -> return
+    }
+    val cancelable = item.phase == BatchPhase.QUEUED ||
+        item.phase == BatchPhase.DOWNLOADING ||
+        item.phase == BatchPhase.WAITING_TO_INSTALL
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (item.phase == BatchPhase.DOWNLOADING && fraction != null) {
+                    Text(
+                        text = "${(fraction * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            if (fraction != null) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+        if (cancelable) {
+            IconButton(onClick = onCancel, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Cancel this update",
+                    modifier = Modifier.size(16.dp),
+                )
             }
         }
     }
