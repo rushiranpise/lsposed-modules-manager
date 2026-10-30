@@ -250,13 +250,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var detectedModules: List<InstalledModule> = emptyList()
     private var installedVersionMap: Map<String, InstalledPackageVersion> = emptyMap()
 
-    /** The system installer can finish while this process is gone. */
+    /** Keeps the installed list current without scanning every time the app is resumed. */
     private val packageChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val packageName = intent?.data?.schemeSpecificPart ?: return
-            if (container.pendingInstalls.isPending(packageName)) rescan()
+            if (intent?.data?.schemeSpecificPart == null) return
+            rescan()
         }
     }
+
+    private var lastScanAt = 0L
 
     val updates: StateFlow<List<ModuleUpdate>> = combine(
         modules,
@@ -304,6 +306,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 IntentFilter().apply {
                     addAction(Intent.ACTION_PACKAGE_ADDED)
                     addAction(Intent.ACTION_PACKAGE_REPLACED)
+                    addAction(Intent.ACTION_PACKAGE_REMOVED)
                     addDataScheme("package")
                 },
                 ContextCompat.RECEIVER_EXPORTED,
@@ -373,6 +376,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun rescan(showMessage: Boolean = false) {
         viewModelScope.launch {
             val scanned = withContext(Dispatchers.IO) { container.scanner.scan() }
+            lastScanAt = System.currentTimeMillis()
             detectedModules = scanned.modules
             installedVersionMap = scanned.versions
             _installedVersions.value = scanned.versions
@@ -380,6 +384,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             rebuildRepoInstalled()
             if (showMessage) message("Rescanned installed modules")
         }
+    }
+
+    /** Covers LSPosed scope edits, which do not send a package broadcast, without scanning
+     * on every resume. */
+    fun rescanIfStale(maxAgeMs: Long = 60_000L) {
+        if (System.currentTimeMillis() - lastScanAt >= maxAgeMs) rescan()
     }
 
     /**
