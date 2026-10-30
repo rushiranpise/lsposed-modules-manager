@@ -83,7 +83,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.ModuleUpdate
 import com.rushi.modulesmanager.ReadmeTranslationState
-import com.rushi.modulesmanager.data.ModuleVersion
 import com.rushi.modulesmanager.data.SourceAlternative
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
@@ -140,7 +139,6 @@ fun ModuleDetailScreen(
     val sourceAlternatives by viewModel.sourceAlternatives.collectAsStateWithLifecycle()
     val release = module?.releaseFor(channel)
     val primaryAsset = release?.preferredAsset()
-    val latest = module?.latest(channel)
 
     LaunchedEffect(packageName) { viewModel.openModule(packageName) }
     DisposableEffect(packageName) {
@@ -277,7 +275,6 @@ fun ModuleDetailScreen(
                 installedVersion = installedVersion,
                 installedHasLauncher = installedHasLauncher,
                 update = update,
-                latest = latest,
                 channel = channel,
                 primaryAsset = primaryAsset,
                 onInstall = {
@@ -451,7 +448,6 @@ private fun DetailHeader(
     installedVersion: String?,
     installedHasLauncher: Boolean,
     update: ModuleUpdate?,
-    latest: ModuleVersion?,
     channel: UpdateChannel,
     primaryAsset: RepoAsset?,
     onInstall: () -> Unit,
@@ -463,12 +459,6 @@ private fun DetailHeader(
     val hasUpdate = updateVersion != null
     val isInstalled = installedVersion != null
     val latestDate = formatDate(module.latestTime(channel))
-    // Installed modules already show their version in the pills below.
-    val latestLabel = when {
-        latest == null -> ""
-        isInstalled -> if (latestDate != null) "Released" else ""
-        else -> "Latest ${latest.name}"
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -503,14 +493,7 @@ private fun DetailHeader(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     StarBadge(module.stargazerCount)
-                    if (latestLabel.isNotBlank()) {
-                        Text(
-                            text = latestLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (latestDate != null) StatusPill(text = latestDate)
-                    }
+                    if (latestDate != null) StatusPill(text = latestDate)
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
