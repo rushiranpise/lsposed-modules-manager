@@ -92,7 +92,6 @@ import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
-import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
@@ -755,15 +754,11 @@ internal fun ModuleCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         when {
-                            update != null -> StatusPill(
+                            update != null -> VersionPill(
                                 text = "v${shortVersion(update.installed.versionName)} \u2192 v${shortVersion(update.version.name)}",
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
-                            installed != null -> StatusPill(
+                            installed != null -> VersionPill(
                                 text = "Installed ${shortVersion(installed.versionName)}".trim(),
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                             latest != null -> VersionPill(text = "v${shortVersion(latest.name)}")
                         }

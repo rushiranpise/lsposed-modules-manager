@@ -84,6 +84,7 @@ import com.rushi.modulesmanager.ui.components.EmptyState
 import com.rushi.modulesmanager.ui.components.InstalledAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StatusPill
+import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import kotlinx.coroutines.launch
@@ -649,20 +650,33 @@ private fun InstalledCard(
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val showsUpdate = update != null && !ignored && skippedVersion == null
-                    Text(
-                        text = buildString {
-                            append("v${module.versionName ?: module.versionCode}")
-                            if (showsUpdate && update != null) {
-                                append(" \u2192 v${shortVersion(update.version.name)}")
-                            }
-                            if (module.scope.isNotEmpty()) append(" - ${module.scope.size} targets")
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Row(
                         modifier = Modifier.weight(1f),
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        VersionPill(
+                            text = buildString {
+                                append("v${module.versionName ?: module.versionCode}")
+                                if (showsUpdate && update != null) {
+                                    append(" \u2192 v${shortVersion(update.version.name)}")
+                                }
+                            },
+                        )
+                        if (module.scope.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (module.scope.size == 1) {
+                                    "1 target"
+                                } else {
+                                    "${module.scope.size} targets"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     if (ignored || skippedVersion != null || update == null) {
                         Spacer(Modifier.width(8.dp))
                         when {
