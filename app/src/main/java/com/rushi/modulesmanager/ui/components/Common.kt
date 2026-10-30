@@ -173,20 +173,25 @@ fun VersionPill(text: String) {
 
 @Composable
 fun StarBadge(count: Int, modifier: Modifier = Modifier) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val gold = if (dark) Color(0xFFE3B341) else Color(0xFF9A6700)
     CountBadge(
         count = count,
         imageVector = Icons.Outlined.Star,
-        tint = MaterialTheme.colorScheme.tertiary,
+        contentColor = gold,
+        borderColor = gold.copy(alpha = 0.55f),
         modifier = modifier,
     )
 }
 
 @Composable
 fun ForkBadge(count: Int, modifier: Modifier = Modifier) {
+    val gray = MaterialTheme.colorScheme.onSurfaceVariant
     CountBadge(
         count = count,
         imageVector = Icons.Outlined.ForkRight,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        contentColor = gray,
+        borderColor = MaterialTheme.colorScheme.outlineVariant,
         modifier = modifier,
     )
 }
@@ -195,14 +200,16 @@ fun ForkBadge(count: Int, modifier: Modifier = Modifier) {
 private fun CountBadge(
     count: Int,
     imageVector: ImageVector,
-    tint: Color,
+    contentColor: Color,
+    borderColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = Color.Transparent,
+        contentColor = contentColor,
         shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
@@ -212,7 +219,7 @@ private fun CountBadge(
                 imageVector = imageVector,
                 contentDescription = null,
                 modifier = Modifier.size(11.dp),
-                tint = tint,
+                tint = contentColor,
             )
             Spacer(Modifier.width(3.dp))
             Text(
