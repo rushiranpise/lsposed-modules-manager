@@ -71,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -99,6 +100,7 @@ import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.favouriteColor
+import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.shortVersion
 import com.rushi.modulesmanager.ui.theme.amoledCardBorder
 import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
@@ -843,7 +845,11 @@ private fun InformationTab(
                 value = module.collaborators.joinToString(", ") { it.name ?: it.login },
             )
         }
-        InfoRow("Stars", module.stargazerCount.toString())
+        InfoRow(
+            title = "Stars",
+            value = module.stargazerCount.toString(),
+            valueColor = starAccentColor(),
+        )
         InfoRow("Forks", module.forkCount.toString())
         if (module.scope.isNotEmpty()) {
             InfoRow(
@@ -861,7 +867,12 @@ private fun InformationTab(
 }
 
 @Composable
-private fun InfoRow(title: String, value: String, onClick: (() -> Unit)? = null) {
+private fun InfoRow(
+    title: String,
+    value: String,
+    onClick: (() -> Unit)? = null,
+    valueColor: Color? = null,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -886,7 +897,11 @@ private fun InfoRow(title: String, value: String, onClick: (() -> Unit)? = null)
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = valueColor ?: if (onClick != null) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
         )
     }
 }
