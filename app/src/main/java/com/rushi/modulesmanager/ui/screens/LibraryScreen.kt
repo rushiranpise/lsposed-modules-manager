@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.History
@@ -16,8 +17,9 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,12 +41,11 @@ import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.ui.components.EmptyState
-import com.rushi.modulesmanager.ui.components.HeaderDivider
 
 private enum class LibraryTab(val label: String) {
     FAVOURITES("Favourites"),
-    RECENT("Recently viewed"),
-    HIDDEN("Skipped & ignored"),
+    RECENT("Recent"),
+    HIDDEN("Skipped"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +93,8 @@ fun LibraryScreen(
         LibraryTab.HIDDEN -> (skipped.keys + ignored).distinct().sortedBy { label(it).lowercase() }
     }
     val entries = packages.mapNotNull { modulesByPackage[it] }
+    val hiddenCount = (skipped.keys + ignored).distinct().size
+    val tabCounts = listOf(favourites.size, recentlyViewed.size, hiddenCount)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -103,13 +106,18 @@ fun LibraryScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
-                HeaderDivider()
-                PrimaryTabRow(selectedTabIndex = tab) {
+                SecondaryTabRow(selectedTabIndex = tab) {
                     LibraryTab.entries.forEachIndexed { index, item ->
                         Tab(
                             selected = tab == index,
                             onClick = { tab = index },
-                            text = { Text(item.label) },
+                            text = {
+                                TabLabel(
+                                    text = item.label,
+                                    count = tabCounts[index],
+                                    selected = tab == index,
+                                )
+                            },
                         )
                     }
                 }
@@ -192,6 +200,35 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TabLabel(text: String, count: Int, selected: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text)
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            },
+            contentColor = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            )
         }
     }
 }
