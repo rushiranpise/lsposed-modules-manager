@@ -52,6 +52,7 @@ import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.DownloadBanner
+import com.rushi.modulesmanager.ui.screens.DiagnosticsScreen
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
 import com.rushi.modulesmanager.ui.screens.ModuleDetailScreen
 import com.rushi.modulesmanager.ui.screens.RepoListScreen
@@ -72,7 +73,9 @@ fun AppRoot(viewModel: AppViewModel) {
     val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute != null && !currentRoute.startsWith("module/")
+    val showBottomBar = currentRoute != null &&
+        currentRoute != "diagnostics" &&
+        !currentRoute.startsWith("module/")
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
@@ -268,7 +271,16 @@ private fun AppNavHost(
             )
         }
         composable(Destination.SETTINGS.route) {
-            SettingsScreen(viewModel)
+            SettingsScreen(
+                viewModel = viewModel,
+                onOpenDiagnostics = { navController.navigate("diagnostics") },
+            )
+        }
+        composable("diagnostics") {
+            DiagnosticsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable("module/{packageName}") { entry ->
             val packageName = entry.arguments?.getString("packageName").orEmpty()

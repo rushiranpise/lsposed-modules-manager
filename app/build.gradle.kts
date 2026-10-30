@@ -9,6 +9,16 @@ val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank() &&
     !releaseKeyAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
 
+// Short hash for the Diagnostics screen; works without running git at configure time.
+val gitCommit: String = runCatching {
+    val head = rootProject.file(".git/HEAD").readText().trim()
+    if (head.startsWith("ref:")) {
+        rootProject.file(".git/" + head.removePrefix("ref:").trim()).readText().trim().take(7)
+    } else {
+        head.take(7)
+    }
+}.getOrDefault("unknown")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -24,6 +34,7 @@ android {
         targetSdk = 36
         versionCode = 7
         versionName = "1.1.5"
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
     }
 
     buildFeatures {

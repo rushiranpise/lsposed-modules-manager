@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rushi.modulesmanager.data.ApkInspector
 import com.rushi.modulesmanager.data.ApkInstaller
 import com.rushi.modulesmanager.data.ApkVariants
+import com.rushi.modulesmanager.data.AppStorage
 import com.rushi.modulesmanager.data.AppTheme
 import com.rushi.modulesmanager.data.DefaultSources
 import com.rushi.modulesmanager.data.DownloadCenter
@@ -507,6 +508,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             loadMutex.withLock { container.repo.load(DefaultSources.official) }
             refreshLiveUpdates(force = true)
+        }
+    }
+
+    fun clearIndexCache() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                AppStorage.clearIndexCache(container.appContext)
+                AppStorage.clearReadmeCache(container.appContext)
+            }
+            message("Index cache cleared")
+            refresh()
+        }
+    }
+
+    fun clearDownloadedApks() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                AppStorage.clearDownloadedApks(container.appContext)
+            }
+            message("Downloaded APKs cleared")
         }
     }
 

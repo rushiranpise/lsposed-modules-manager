@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ColorLens
@@ -59,7 +60,10 @@ import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.ui.components.HeaderDivider
 
 @Composable
-fun SettingsScreen(viewModel: AppViewModel) {
+fun SettingsScreen(
+    viewModel: AppViewModel,
+    onOpenDiagnostics: () -> Unit = {},
+) {
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val installer by viewModel.installer.collectAsStateWithLifecycle()
     val shizukuStatus by viewModel.shizukuStatus.collectAsStateWithLifecycle()
@@ -181,6 +185,12 @@ fun SettingsScreen(viewModel: AppViewModel) {
                 icon = Icons.Outlined.Info,
                 title = "Modules Manager",
                 subtitle = "Version ${BuildConfig.VERSION_NAME}",
+            )
+            SettingsRow(
+                icon = Icons.Outlined.BugReport,
+                title = "Diagnostics",
+                subtitle = "Device, build and cache details",
+                onClick = onOpenDiagnostics,
             )
             SettingsRow(
                 icon = Icons.Outlined.Code,
