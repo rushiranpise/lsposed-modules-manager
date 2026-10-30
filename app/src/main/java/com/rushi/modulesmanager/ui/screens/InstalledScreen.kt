@@ -657,7 +657,7 @@ private fun InstalledCard(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
-                            else -> StatusPill(text = "Not in repository")
+                            else -> StatusPill(text = "Untracked")
                         }
                     }
                     val batchActive = batchItem != null &&
