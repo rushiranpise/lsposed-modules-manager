@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import java.util.zip.ZipFile
 
 data class InstalledModule(
@@ -38,24 +39,19 @@ class InstalledModuleScanner(private val context: Context) {
     private val libxposedCache = HashMap<String, Boolean>()
 
     fun scan(): InstalledModulesResult {
-        @Suppress("DEPRECATION")
-        val packages = pm.getInstalledPackages(PackageManager.GET_META_DATA)
+        val packages = installedPackages()
         val modules = ArrayList<InstalledModule>()
         val versions = HashMap<String, InstalledPackageVersion>(packages.size)
-        for (info in packages) {
-            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                info.longVersionCode
-            } else {
-                @Suppress("DEPRECATION")
-                info.versionCode.toLong()
-            }
-            versions[info.packageName] = InstalledPackageVersion(
-                versionName = info.versionName,
+        for (base in packages) {
+            val versionCode = versionCodeOf(base)
+            versions[base.packageName] = InstalledPackageVersion(
+                versionName = base.versionName,
                 versionCode = versionCode,
-                lastUpdateTime = info.lastUpdateTime,
+                lastUpdateTime = base.lastUpdateTime,
             )
 
-            if (info.packageName == context.packageName) continue
+            if (base.packageName == context.packageName) continue
+            val info = packageInfoWithMetadata(base.packageName) ?: base
             if (!isXposedModule(info)) continue
             modules += toInstalledModule(info)
         }
@@ -63,6 +59,48 @@ class InstalledModuleScanner(private val context: Context) {
             modules = modules.sortedBy { it.label.lowercase() },
             versions = versions,
         )
+    }
+
+    /**
+     * The metadata bundle of every installed package does not fit in one binder
+     * reply on phones with many apps, and the truncated parcel kills the package
+     * manager connection. The bulk call therefore asks for no metadata, and the
+     * few packages that need it are resolved one at a time above.
+     */
+    private fun installedPackages(): List<PackageInfo> {
+        @Suppress("DEPRECATION")
+        return try {
+            pm.getInstalledPackages(0)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Package list without metadata failed, using app list", e)
+            @Suppress("DEPRECATION")
+            try {
+                pm.getInstalledApplications(0).mapNotNull { app ->
+                    runCatching {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo(app.packageName, 0)
+                    }.getOrNull()
+                }
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "Could not read the installed package list", e)
+                emptyList()
+            }
+        }
+    }
+
+    private fun packageInfoWithMetadata(packageName: String): PackageInfo? = try {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(packageName, PackageManager.GET_META_DATA)
+    } catch (e: RuntimeException) {
+        Log.w(TAG, "Skipping metadata for $packageName", e)
+        null
+    }
+
+    private fun versionCodeOf(info: PackageInfo): Long = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        info.longVersionCode
+    } else {
+        @Suppress("DEPRECATION")
+        info.versionCode.toLong()
     }
 
     /**
@@ -76,12 +114,7 @@ class InstalledModuleScanner(private val context: Context) {
         if (meta?.getBoolean("xposedmodule", false) == true || meta?.containsKey("xposedminversion") == true) {
             return true
         }
-        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            info.versionCode.toLong()
-        }
+        val versionCode = versionCodeOf(info)
         val key = "${info.packageName}:$versionCode:${info.lastUpdateTime}"
         return libxposedCache.getOrPut(key) { hasLibxposedMetadata(app.sourceDir) }
     }
@@ -128,18 +161,12 @@ class InstalledModuleScanner(private val context: Context) {
     private fun toInstalledModule(info: PackageInfo): InstalledModule {
         val app = info.applicationInfo
         val meta = app?.metaData
-        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            info.versionCode.toLong()
-        }
         return InstalledModule(
             packageName = info.packageName,
             label = app?.let { runCatching { pm.getApplicationLabel(it).toString() }.getOrNull() }
                 ?: info.packageName,
             versionName = info.versionName,
-            versionCode = versionCode,
+            versionCode = versionCodeOf(info),
             description = meta?.getString("xposeddescription"),
             scope = meta?.let { readScope(it) }.orEmpty(),
             icon = app?.let { runCatching { it.loadIcon(pm) }.getOrNull() },
@@ -160,5 +187,7 @@ class InstalledModuleScanner(private val context: Context) {
         return runCatching { context.startActivity(intent) }.isSuccess
     }
 
-
+    private companion object {
+        const val TAG = "InstalledModuleScanner"
+    }
 }
