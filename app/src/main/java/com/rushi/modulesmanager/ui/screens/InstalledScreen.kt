@@ -1,5 +1,11 @@
 package com.rushi.modulesmanager.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +66,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
@@ -355,16 +362,25 @@ fun InstalledScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
-                if (download == null) {
+                val stackAlpha by animateFloatAsState(
+                    targetValue = if (download == null) 1f else 0f,
+                    label = "fabStack",
+                )
+                if (stackAlpha > 0.01f) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
+                        .alpha(stackAlpha)
                         .navigationBarsPadding()
                         .padding(end = 16.dp, bottom = 98.dp),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (showScrollToTop) {
+                    AnimatedVisibility(
+                        visible = showScrollToTop,
+                        enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                    ) {
                         FloatingActionButton(
                             onClick = { scope.launch { listState.animateScrollToItem(0) } },
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
