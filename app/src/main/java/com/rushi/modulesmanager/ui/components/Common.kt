@@ -19,6 +19,8 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.InstallMobile
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material3.HorizontalDivider
@@ -304,7 +306,12 @@ fun LoadingState(text: String) {
 }
 
 @Composable
-fun DownloadBanner(state: DownloadCenter.State, onCancel: () -> Unit) {
+fun DownloadBanner(
+    state: DownloadCenter.State,
+    onCancel: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -317,10 +324,11 @@ fun DownloadBanner(state: DownloadCenter.State, onCancel: () -> Unit) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = when (state.phase) {
-                        DownloadCenter.Phase.DOWNLOADING -> Icons.Outlined.Download
-                        DownloadCenter.Phase.VERIFYING -> Icons.Outlined.Verified
-                        DownloadCenter.Phase.INSTALLING -> Icons.Outlined.InstallMobile
+                    imageVector = when {
+                        state.paused -> Icons.Outlined.Pause
+                        state.phase == DownloadCenter.Phase.DOWNLOADING -> Icons.Outlined.Download
+                        state.phase == DownloadCenter.Phase.VERIFYING -> Icons.Outlined.Verified
+                        else -> Icons.Outlined.InstallMobile
                     },
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
@@ -335,19 +343,32 @@ fun DownloadBanner(state: DownloadCenter.State, onCancel: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = when (state.phase) {
-                            DownloadCenter.Phase.DOWNLOADING -> {
+                        text = when {
+                            state.paused -> {
+                                val total = if (state.total > 0) formatBytes(state.total) else "unknown size"
+                                "Paused - ${formatBytes(state.downloaded)} of $total"
+                            }
+                            state.phase == DownloadCenter.Phase.DOWNLOADING -> {
                                 val total = if (state.total > 0) formatBytes(state.total) else "unknown size"
                                 "${formatBytes(state.downloaded)} of $total"
                             }
-                            DownloadCenter.Phase.VERIFYING -> "Verifying package..."
-                            DownloadCenter.Phase.INSTALLING -> "Opening the installer..."
+                            state.phase == DownloadCenter.Phase.VERIFYING -> "Verifying package..."
+                            else -> "Opening the installer..."
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (state.phase == DownloadCenter.Phase.DOWNLOADING) {
+                    if (state.paused) {
+                        IconButton(onClick = onResume) {
+                            Icon(Icons.Outlined.PlayArrow, contentDescription = "Resume download")
+                        }
+                    } else {
+                        IconButton(onClick = onPause) {
+                            Icon(Icons.Outlined.Pause, contentDescription = "Pause download")
+                        }
+                    }
                     IconButton(onClick = onCancel) {
                         Icon(Icons.Outlined.Close, contentDescription = "Cancel download")
                     }
@@ -355,7 +376,7 @@ fun DownloadBanner(state: DownloadCenter.State, onCancel: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             val fraction = state.fraction
-            if (state.phase == DownloadCenter.Phase.DOWNLOADING && fraction == null) {
+            if (state.phase == DownloadCenter.Phase.DOWNLOADING && fraction == null && !state.paused) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()

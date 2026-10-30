@@ -76,7 +76,9 @@ class DownloadService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(state?.label ?: "Preparing download")
-            .setContentText(state?.fileName.orEmpty())
+            .setContentText(
+                if (state?.paused == true) "Paused - ${state.fileName}" else state?.fileName.orEmpty(),
+            )
             .setContentIntent(open)
             .setOnlyAlertOnce(true)
             .setOngoing(true)

@@ -125,6 +125,15 @@ private data class PreparedInstall(
     val asset: RepoAsset,
 )
 
+/** One module-page install. It outlives a pause so the partial file can be resumed. */
+private class InstallSession(
+    val module: RepoModule,
+    val asset: RepoAsset,
+    val destination: File,
+) {
+    var paused = false
+}
+
 data class TranslationState(val text: String? = null, val loading: Boolean = false)
 
 private data class LibraryState(
@@ -237,6 +246,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var detailJob: Job? = null
     private var readmeTranslationJob: Job? = null
     private var downloadJob: Job? = null
+    private var activeInstall: InstallSession? = null
     private var batchJob: Job? = null
     private var batchPersisting = false
     private val batchItemJobs = mutableMapOf<String, Job>()
@@ -962,55 +972,118 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             return
         }
 
+        launchInstall(module, asset, previousState = null)
+    }
+
+    private fun launchInstall(
+        module: RepoModule,
+        asset: RepoAsset,
+        previousState: DownloadCenter.State?,
+        waitFor: Job? = null,
+    ) {
+        val appContext = container.appContext
         DownloadService.start(appContext)
         val destination = apkDestination(appContext, module, asset)
+        val session = InstallSession(module, asset, destination)
+        activeInstall = session
         downloadJob = viewModelScope.launch {
-            try {
-                container.downloads.update(
-                    DownloadCenter.State(
-                        packageName = module.packageName,
-                        label = module.displayName,
-                        fileName = asset.name,
-                        downloaded = 0,
-                        total = asset.size,
-                        phase = DownloadCenter.Phase.DOWNLOADING,
-                    ),
-                )
-                val file = container.downloadSlots.withSlot {
-                    downloadApk(appContext, module, asset, destination) { done, total ->
-                        container.downloads.progress(done, total)
-                    }
+            waitFor?.join()
+            runInstall(session, previousState)
+        }
+    }
+
+    private suspend fun runInstall(
+        session: InstallSession,
+        previousState: DownloadCenter.State?,
+    ) {
+        val appContext = container.appContext
+        val module = session.module
+        val asset = session.asset
+        val destination = session.destination
+        try {
+            container.downloads.update(
+                previousState ?: DownloadCenter.State(
+                    packageName = module.packageName,
+                    label = module.displayName,
+                    fileName = asset.name,
+                    downloaded = 0,
+                    total = asset.size,
+                    phase = DownloadCenter.Phase.DOWNLOADING,
+                ),
+            )
+            val file = container.downloadSlots.withSlot {
+                downloadApk(appContext, module, asset, destination) { done, total ->
+                    container.downloads.progress(done, total)
                 }
-                container.downloads.phase(DownloadCenter.Phase.INSTALLING)
-                markPending(module, asset)
-                val result = installDownloaded(appContext, file, module, announce = true)
-                container.downloads.update(null)
-                when (result) {
-                    InstallResult.Success -> {
-                        container.pendingInstalls.remove(module.packageName)
-                        message("${module.displayName} installed")
-                        rescan()
-                        file.delete()
-                    }
-                    InstallResult.Delegated -> message("Opening the system installer")
-                    is InstallResult.Failure -> {
-                        container.pendingInstalls.remove(module.packageName)
-                        message(result.message)
-                        file.delete()
-                    }
-                }
-            } catch (e: CancellationException) {
-                container.downloads.update(null)
-                destination.delete()
-                File(destination.path + ".part").delete()
-                throw e
-            } catch (e: Exception) {
-                container.downloads.update(null)
-                container.pendingInstalls.remove(module.packageName)
-                destination.delete()
-                File(destination.path + ".part").delete()
-                message(e.userMessage())
             }
+            container.downloads.phase(DownloadCenter.Phase.INSTALLING)
+            markPending(module, asset)
+            val result = installDownloaded(appContext, file, module, announce = true)
+            container.downloads.update(null)
+            clearActiveInstall(session)
+            when (result) {
+                InstallResult.Success -> {
+                    container.pendingInstalls.remove(module.packageName)
+                    message("${module.displayName} installed")
+                    rescan()
+                    file.delete()
+                }
+                InstallResult.Delegated -> message("Opening the system installer")
+                is InstallResult.Failure -> {
+                    container.pendingInstalls.remove(module.packageName)
+                    message(result.message)
+                    file.delete()
+                }
+            }
+        } catch (e: CancellationException) {
+            if (session.paused) {
+                // Keep the .part file; resuming continues from the bytes already on disk.
+                container.downloads.pause()
+            } else {
+                container.downloads.update(null)
+                clearActiveInstall(session)
+                destination.delete()
+                File(destination.path + ".part").delete()
+            }
+            throw e
+        } catch (e: Exception) {
+            container.downloads.update(null)
+            clearActiveInstall(session)
+            container.pendingInstalls.remove(module.packageName)
+            destination.delete()
+            File(destination.path + ".part").delete()
+            message(e.userMessage())
+        }
+    }
+
+    private fun clearActiveInstall(session: InstallSession) {
+        if (activeInstall === session) activeInstall = null
+    }
+
+    /** Stops the transfer but keeps the partial file so it can continue later. */
+    fun pauseDownload() {
+        val session = activeInstall ?: return
+        if (session.paused) return
+        if (container.downloads.state.value?.phase != DownloadCenter.Phase.DOWNLOADING) return
+        session.paused = true
+        downloadJob?.cancel()
+        container.downloads.pause()
+    }
+
+    fun resumeDownload() {
+        val session = activeInstall ?: return
+        if (!session.paused) return
+        val previousState = container.downloads.state.value?.copy(
+            paused = false,
+            phase = DownloadCenter.Phase.DOWNLOADING,
+        )
+        val previousJob = downloadJob
+        val resumed = InstallSession(session.module, session.asset, session.destination)
+        activeInstall = resumed
+        downloadJob = viewModelScope.launch {
+            // Let the cancelled transfer release the partial file before reading it again.
+            previousJob?.join()
+            runInstall(resumed, previousState)
         }
     }
 
@@ -1557,6 +1630,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun cancelDownload() {
+        activeInstall?.paused = false
+        activeInstall = null
         downloadJob?.cancel()
         container.downloads.update(null)
     }

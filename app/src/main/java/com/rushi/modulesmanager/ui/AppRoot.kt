@@ -98,7 +98,12 @@ fun AppRoot(viewModel: AppViewModel) {
                 if (!wide) {
                     Column {
                         download?.let { state ->
-                            DownloadBanner(state = state, onCancel = viewModel::cancelDownload)
+                            DownloadBanner(
+                                state = state,
+                                onCancel = viewModel::cancelDownload,
+                                onPause = viewModel::pauseDownload,
+                                onResume = viewModel::resumeDownload,
+                            )
                         }
                         if (showBottomBar) {
                             NavigationBar {
@@ -125,7 +130,12 @@ fun AppRoot(viewModel: AppViewModel) {
                         .fillMaxSize(),
                 ) {
                     download?.let { state ->
-                        DownloadBanner(state = state, onCancel = viewModel::cancelDownload)
+                        DownloadBanner(
+                            state = state,
+                            onCancel = viewModel::cancelDownload,
+                            onPause = viewModel::pauseDownload,
+                            onResume = viewModel::resumeDownload,
+                        )
                     }
                     Row(modifier = Modifier.weight(1f)) {
                         if (showBottomBar) {

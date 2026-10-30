@@ -135,6 +135,7 @@ class DownloadCenter {
         val downloaded: Long,
         val total: Long,
         val phase: Phase,
+        val paused: Boolean = false,
     ) {
         val fraction: Float?
             get() = if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else null
@@ -155,5 +156,9 @@ class DownloadCenter {
 
     fun phase(phase: Phase) {
         _state.value = _state.value?.copy(phase = phase)
+    }
+
+    fun pause() {
+        _state.value = _state.value?.copy(paused = true)
     }
 }
