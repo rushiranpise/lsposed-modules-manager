@@ -627,7 +627,7 @@ private fun InstalledCard(
                             }
                             repoModule?.developerLogin()?.let { developer ->
                                 DropdownMenuItem(
-                                    text = { Text("All modules by $developer") },
+                                    text = { Text("More by $developer") },
                                     onClick = {
                                         menuOpen = false
                                         onOpenDeveloper(developer)
