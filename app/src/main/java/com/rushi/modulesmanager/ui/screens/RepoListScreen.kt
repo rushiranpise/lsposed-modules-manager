@@ -620,7 +620,7 @@ private fun TranslateAction(
 }
 
 @Composable
-private fun ModuleCard(
+internal fun ModuleCard(
     module: RepoModule,
     latest: ModuleVersion?,
     installed: InstalledPackageVersion?,
