@@ -54,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -123,6 +124,7 @@ fun RepoListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val sourceAlternatives by viewModel.sourceAlternatives.collectAsStateWithLifecycle()
     val download by viewModel.downloads.collectAsStateWithLifecycle()
 
     var query by rememberSaveable { mutableStateOf("") }
@@ -351,6 +353,7 @@ fun RepoListScreen(
                                     ),
                                     onTranslate = { viewModel.translate(module) },
                                     onShowOriginal = { viewModel.showOriginal(module) },
+                                    sourceCount = sourceAlternatives[module.packageName]?.size ?: 1,
                                     favourite = module.packageName in favourites,
                                     onToggleFavourite = {
                                         viewModel.toggleFavourite(module.packageName)
@@ -643,6 +646,7 @@ internal fun ModuleCard(
     showTranslate: Boolean,
     onTranslate: () -> Unit,
     onShowOriginal: () -> Unit,
+    sourceCount: Int = 1,
     favourite: Boolean,
     onToggleFavourite: () -> Unit,
     onClick: () -> Unit,
@@ -671,6 +675,20 @@ internal fun ModuleCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    if (sourceCount > 1) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ) {
+                            Text(
+                                text = "$sourceCount sources",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(2.dp))
+                    }
                     IconButton(
                         onClick = onToggleFavourite,
                         modifier = Modifier.size(32.dp),

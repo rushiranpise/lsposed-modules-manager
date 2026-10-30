@@ -67,6 +67,7 @@ fun LibraryScreen(
 ) {
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val recentlyViewed by viewModel.recentlyViewed.collectAsStateWithLifecycle()
+    val sourceAlternatives by viewModel.sourceAlternatives.collectAsStateWithLifecycle()
     val download by viewModel.downloads.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val manualModules by viewModel.manualModules.collectAsStateWithLifecycle()
@@ -238,6 +239,7 @@ fun LibraryScreen(
                             ),
                             onTranslate = { viewModel.translate(module) },
                             onShowOriginal = { viewModel.showOriginal(module) },
+                            sourceCount = sourceAlternatives[packageName]?.size ?: 1,
                             favourite = packageName in favourites,
                             onToggleFavourite = { viewModel.toggleFavourite(packageName) },
                             onClick = { onOpenModule(packageName) },
