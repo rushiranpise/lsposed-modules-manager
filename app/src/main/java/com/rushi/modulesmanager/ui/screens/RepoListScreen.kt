@@ -93,6 +93,7 @@ import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
+import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import kotlinx.coroutines.launch
@@ -739,7 +740,7 @@ internal fun ModuleCard(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
-                            latest != null -> StatusPill(text = "v${shortVersion(latest.name)}")
+                            latest != null -> VersionPill(text = "v${shortVersion(latest.name)}")
                         }
                     }
                     val translated = translation?.text != null

@@ -1,5 +1,6 @@
 package com.rushi.modulesmanager.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +136,29 @@ fun StatusPill(
         color = containerColor,
         contentColor = contentColor,
         shape = RoundedCornerShape(percent = 50),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** The GitHub-style green outline used for a module's version. */
+@Composable
+fun VersionPill(text: String) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val border = if (dark) Color(0xFF238636) else Color(0xFF2DA44E)
+    val content = if (dark) Color(0xFF3FB950) else Color(0xFF1A7F37)
+    Surface(
+        color = Color.Transparent,
+        contentColor = content,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, border),
     ) {
         Text(
             text = text,
