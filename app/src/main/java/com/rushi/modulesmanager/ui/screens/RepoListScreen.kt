@@ -116,6 +116,7 @@ fun RepoListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val download by viewModel.downloads.collectAsStateWithLifecycle()
 
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RepoFilter.ALL) }
@@ -365,6 +366,7 @@ fun RepoListScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
+                if (download == null) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -454,6 +456,7 @@ fun RepoListScreen(
                             Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
                         }
                     }
+                }
                 }
             }
         }

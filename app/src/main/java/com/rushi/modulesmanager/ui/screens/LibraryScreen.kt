@@ -65,6 +65,7 @@ fun LibraryScreen(
 ) {
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val recentlyViewed by viewModel.recentlyViewed.collectAsStateWithLifecycle()
+    val download by viewModel.downloads.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val manualModules by viewModel.manualModules.collectAsStateWithLifecycle()
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
@@ -246,7 +247,7 @@ fun LibraryScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
-                if (showScrollToTop) {
+                if (download == null && showScrollToTop) {
                     FloatingActionButton(
                         onClick = { scope.launch { listState.animateScrollToItem(0) } },
                         modifier = Modifier

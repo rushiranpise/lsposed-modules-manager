@@ -93,6 +93,7 @@ fun InstalledScreen(
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
+    val download by viewModel.downloads.collectAsStateWithLifecycle()
     val ignoredUpdates by viewModel.ignoredUpdates.collectAsStateWithLifecycle()
     val preReleaseModules by viewModel.preReleaseModules.collectAsStateWithLifecycle()
     val skippedVersions by viewModel.skippedVersions.collectAsStateWithLifecycle()
@@ -354,6 +355,7 @@ fun InstalledScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
+                if (download == null) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -384,6 +386,7 @@ fun InstalledScreen(
                             Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
                         }
                     }
+                }
                 }
             }
         }

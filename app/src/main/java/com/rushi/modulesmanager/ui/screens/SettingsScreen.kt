@@ -77,6 +77,7 @@ fun SettingsScreen(
     val systemColors by viewModel.systemColors.collectAsStateWithLifecycle()
     val autoTranslate by viewModel.autoTranslate.collectAsStateWithLifecycle()
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
+    val download by viewModel.downloads.collectAsStateWithLifecycle()
     val concurrentDownloads by viewModel.concurrentDownloads.collectAsStateWithLifecycle()
 
     var showChannelDialog by remember { mutableStateOf(false) }
@@ -204,7 +205,7 @@ fun SettingsScreen(
         val showScrollToTop by remember {
             derivedStateOf { scrollState.value > 0 }
         }
-        if (showScrollToTop) {
+        if (download == null && showScrollToTop) {
             FloatingActionButton(
                 onClick = { scope.launch { scrollState.animateScrollTo(0) } },
                 modifier = Modifier
