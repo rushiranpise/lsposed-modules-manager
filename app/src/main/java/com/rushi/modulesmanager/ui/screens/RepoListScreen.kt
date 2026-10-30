@@ -48,7 +48,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -374,7 +373,7 @@ fun RepoListScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SmallFloatingActionButton(
+                    FloatingActionButton(
                         onClick = {
                             scope.launch { listState.scrollToItem(0) }
                             viewModel.refresh()
@@ -385,7 +384,7 @@ fun RepoListScreen(
                         Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
                     }
                     Box {
-                        SmallFloatingActionButton(
+                        FloatingActionButton(
                             onClick = { showSortMenu = true },
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                             contentColor = MaterialTheme.colorScheme.onSurface,

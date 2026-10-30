@@ -47,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -363,7 +362,7 @@ fun InstalledScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SmallFloatingActionButton(
+                    FloatingActionButton(
                         onClick = {
                             scope.launch { listState.scrollToItem(0) }
                             viewModel.rescan(showMessage = true)

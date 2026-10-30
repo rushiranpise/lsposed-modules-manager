@@ -8,16 +8,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -27,9 +31,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +50,7 @@ import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.ui.components.EmptyState
+import kotlinx.coroutines.launch
 
 private enum class LibraryTab(val label: String, val icon: ImageVector) {
     FAVOURITES("Favourites", Icons.Outlined.FavoriteBorder),
@@ -95,6 +102,8 @@ fun LibraryScreen(
     }
     val entries = packages.mapNotNull { modulesByPackage[it] }
     val tabCounts = listOf(favourites.size, recentlyViewed.size)
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -166,13 +175,22 @@ fun LibraryScreen(
                     )
                 }
             }
-            LazyColumn(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 10.dp,
+                        bottom = 120.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
             if (entries.isEmpty()) {
                 item(key = "empty-${selectedTab.ordinal}") {
                     Box(
@@ -224,7 +242,27 @@ fun LibraryScreen(
                     }
                 }
             }
-        }
+            }
+                val showScrollToTop by remember {
+                    derivedStateOf { listState.firstVisibleItemIndex > 0 }
+                }
+                if (showScrollToTop) {
+                    FloatingActionButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(end = 16.dp, bottom = 98.dp),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.KeyboardArrowUp,
+                            contentDescription = "Scroll to top",
+                        )
+                    }
+                }
+            }
         }
     }
 }

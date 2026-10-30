@@ -1,6 +1,7 @@
 package com.rushi.modulesmanager.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.InstallMobile
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.Palette
@@ -30,6 +33,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,9 +44,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +62,7 @@ import com.rushi.modulesmanager.data.InstallerType
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -77,6 +84,8 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDownloadsDialog by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(showInstallerDialog) {
         if (showInstallerDialog) viewModel.refreshShizukuStatus()
@@ -85,12 +94,16 @@ fun SettingsScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
+                .fillMaxSize(),
+        ) {
+        Column(
+            modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(bottom = 120.dp),
         ) {
             SectionTitle("Appearance")
@@ -187,6 +200,26 @@ fun SettingsScreen(
                 onClick = { viewModel.openLink("https://github.com/rushiranpise/lsposed-modules-manager") },
             )
 
+        }
+        val showScrollToTop by remember {
+            derivedStateOf { scrollState.value > 0 }
+        }
+        if (showScrollToTop) {
+            FloatingActionButton(
+                onClick = { scope.launch { scrollState.animateScrollTo(0) } },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 98.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowUp,
+                    contentDescription = "Scroll to top",
+                )
+            }
+        }
         }
     }
 
