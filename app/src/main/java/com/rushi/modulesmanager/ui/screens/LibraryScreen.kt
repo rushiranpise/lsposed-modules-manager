@@ -1,6 +1,7 @@
 package com.rushi.modulesmanager.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -133,22 +134,27 @@ fun LibraryScreen(
         ) {
             if (entries.isEmpty()) {
                 item(key = "empty-${tab}") {
-                    when (LibraryTab.entries[tab]) {
-                        LibraryTab.FAVOURITES -> EmptyState(
-                            icon = Icons.Outlined.FavoriteBorder,
-                            title = "No favourites yet",
-                            body = "Tap the heart on a module card or module page to keep it here.",
-                        )
-                        LibraryTab.RECENT -> EmptyState(
-                            icon = Icons.Outlined.History,
-                            title = "Nothing viewed yet",
-                            body = "Modules you open show up here.",
-                        )
-                        LibraryTab.HIDDEN -> EmptyState(
-                            icon = Icons.Outlined.VisibilityOff,
-                            title = "Nothing is hidden",
-                            body = "Skip a version or ignore updates from an installed module's menu.",
-                        )
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when (LibraryTab.entries[tab]) {
+                            LibraryTab.FAVOURITES -> EmptyState(
+                                icon = Icons.Outlined.FavoriteBorder,
+                                title = "No favourites yet",
+                                body = "Tap the heart on a module card or module page to keep it here.",
+                            )
+                            LibraryTab.RECENT -> EmptyState(
+                                icon = Icons.Outlined.History,
+                                title = "Nothing viewed yet",
+                                body = "Modules you open show up here.",
+                            )
+                            LibraryTab.HIDDEN -> EmptyState(
+                                icon = Icons.Outlined.VisibilityOff,
+                                title = "Nothing is hidden",
+                                body = "Skip a version or ignore updates from an installed module's menu.",
+                            )
+                        }
                     }
                 }
             } else {

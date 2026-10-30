@@ -358,7 +358,10 @@ fun RepoListScreen(
                 ) {
                     when {
                         loading && modules.isEmpty() -> LoadingState("Loading modules...")
-                        filtered.isEmpty() -> {
+                        filtered.isEmpty() -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             if (modules.isEmpty()) {
                                 EmptyState(
                                     icon = Icons.Outlined.ErrorOutline,

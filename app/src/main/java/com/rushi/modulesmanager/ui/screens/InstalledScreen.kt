@@ -272,33 +272,38 @@ fun InstalledScreen(
                 ) {
                     if (visible.isEmpty()) {
                         item(key = "empty") {
-                            EmptyState(
-                                icon = Icons.Outlined.Apps,
-                                title = if (installed.isEmpty()) {
-                                    "No installed modules found"
-                                } else {
-                                    when (filter) {
-                                        InstalledFilter.UPDATES -> "Nothing to update"
-                                        InstalledFilter.UP_TO_DATE -> "Nothing is up to date"
-                                        InstalledFilter.NOT_IN_REPO -> "All modules are in the repository"
-                                        InstalledFilter.ALL -> "No installed modules found"
-                                    }
-                                },
-                                body = if (installed.isEmpty()) {
-                                    "Install modules from the Modules tab, then enable them in LSPosed."
-                                } else {
-                                    when (filter) {
-                                        InstalledFilter.UPDATES ->
-                                            "All installed modules are on their latest version."
-                                        InstalledFilter.UP_TO_DATE ->
-                                            "No installed module matches the current search."
-                                        InstalledFilter.NOT_IN_REPO ->
-                                            "Every installed module has an entry in the daily index."
-                                        InstalledFilter.ALL ->
-                                            "Install modules from the Modules tab, then enable them in LSPosed."
-                                    }
-                                },
-                            )
+                            Box(
+                                modifier = Modifier.fillParentMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                EmptyState(
+                                    icon = Icons.Outlined.Apps,
+                                    title = if (installed.isEmpty()) {
+                                        "No installed modules found"
+                                    } else {
+                                        when (filter) {
+                                            InstalledFilter.UPDATES -> "Nothing to update"
+                                            InstalledFilter.UP_TO_DATE -> "Nothing is up to date"
+                                            InstalledFilter.NOT_IN_REPO -> "All modules are in the repository"
+                                            InstalledFilter.ALL -> "No installed modules found"
+                                        }
+                                    },
+                                    body = if (installed.isEmpty()) {
+                                        "Install modules from the Modules tab, then enable them in LSPosed."
+                                    } else {
+                                        when (filter) {
+                                            InstalledFilter.UPDATES ->
+                                                "All installed modules are on their latest version."
+                                            InstalledFilter.UP_TO_DATE ->
+                                                "No installed module matches the current search."
+                                            InstalledFilter.NOT_IN_REPO ->
+                                                "Every installed module has an entry in the daily index."
+                                            InstalledFilter.ALL ->
+                                                "Install modules from the Modules tab, then enable them in LSPosed."
+                                        }
+                                    },
+                                )
+                            }
                         }
                     } else {
                         items(visible, key = { it.packageName }) { module ->
