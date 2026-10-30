@@ -75,6 +75,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // LSPosed reads the module declaration from the APK itself; keep the resource
+            // merger from dropping META-INF/xposed/*.
+            merges += "META-INF/xposed/*"
         }
     }
 }
@@ -107,6 +110,11 @@ dependencies {
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+
+    // Compile-time only: the Xposed framework provides this API at runtime.
+    compileOnly("io.github.libxposed:api:102.0.0")
+    // Ships the XposedProvider that makes LSPosed Manager recognise this app as a module.
+    implementation("io.github.libxposed:service:102.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
