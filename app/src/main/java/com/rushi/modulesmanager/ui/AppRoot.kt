@@ -1,8 +1,11 @@
 package com.rushi.modulesmanager.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -16,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -80,75 +85,72 @@ fun AppRoot(viewModel: AppViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            Column {
-                download?.let { state ->
-                    DownloadBanner(state = state, onCancel = viewModel::cancelDownload)
-                }
-                if (showBottomBar) {
-                    NavigationBar {
-                        Destination.entries.forEach { destination ->
-                            NavigationBarItem(
-                                selected = currentRoute == destination.route,
-                                onClick = { navController.navigateTopLevel(destination.route) },
-                                icon = {
-                                    if (destination == Destination.INSTALLED && installed.isNotEmpty()) {
-                                        BadgedBox(
-                                            badge = {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.primary,
-                                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                                ) {
-                                                    Text(installed.size.toString())
-                                                }
-                                            },
-                                        ) {
-                                            Icon(destination.icon, contentDescription = null)
-                                        }
-                                    } else {
-                                        Icon(destination.icon, contentDescription = null)
-                                    }
-                                },
-                                label = { Text(destination.label) },
-                            )
+    BoxWithConstraints {
+        // A rail on tablets and other wide windows; phones keep the bottom bar.
+        val wide = maxWidth >= 600.dp
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                if (!wide) {
+                    Column {
+                        download?.let { state ->
+                            DownloadBanner(state = state, onCancel = viewModel::cancelDownload)
+                        }
+                        if (showBottomBar) {
+                            NavigationBar {
+                                Destination.entries.forEach { destination ->
+                                    NavigationBarItem(
+                                        selected = currentRoute == destination.route,
+                                        onClick = {
+                                            navController.navigateTopLevel(destination.route)
+                                        },
+                                        icon = { DestinationIcon(destination, installed.size) },
+                                        label = { Text(destination.label) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            }
-        },
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = Destination.MODULES.route,
-            modifier = Modifier.padding(padding),
-        ) {
-            composable(Destination.MODULES.route) {
-                RepoListScreen(
+            },
+        ) { padding ->
+            if (wide) {
+                Column(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize(),
+                ) {
+                    download?.let { state ->
+                        DownloadBanner(state = state, onCancel = viewModel::cancelDownload)
+                    }
+                    Row(modifier = Modifier.weight(1f)) {
+                        if (showBottomBar) {
+                            NavigationRail {
+                                Destination.entries.forEach { destination ->
+                                    NavigationRailItem(
+                                        selected = currentRoute == destination.route,
+                                        onClick = {
+                                            navController.navigateTopLevel(destination.route)
+                                        },
+                                        icon = { DestinationIcon(destination, installed.size) },
+                                        label = { Text(destination.label) },
+                                    )
+                                }
+                            }
+                        }
+                        AppNavHost(
+                            navController = navController,
+                            viewModel = viewModel,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            } else {
+                AppNavHost(
+                    navController = navController,
                     viewModel = viewModel,
-                    onOpenModule = { packageName -> navController.navigate("module/$packageName") },
-                )
-            }
-            composable(Destination.INSTALLED.route) {
-                InstalledScreen(
-                    viewModel = viewModel,
-                    onOpenModule = { packageName -> navController.navigate("module/$packageName") },
-                )
-            }
-            composable(Destination.SETTINGS.route) {
-                SettingsScreen(viewModel)
-            }
-            composable("module/{packageName}") { entry ->
-                val packageName = entry.arguments?.getString("packageName").orEmpty()
-                ModuleDetailScreen(
-                    viewModel = viewModel,
-                    packageName = packageName,
-                    onBack = {
-                        viewModel.closeModule()
-                        navController.popBackStack()
-                    },
+                    modifier = Modifier.padding(padding),
                 )
             }
         }
@@ -193,6 +195,66 @@ fun AppRoot(viewModel: AppViewModel) {
                 TextButton(onClick = viewModel::cancelVariantChoice) { Text("Cancel") }
             },
         )
+    }
+}
+
+@Composable
+private fun DestinationIcon(destination: Destination, installedCount: Int) {
+    if (destination == Destination.INSTALLED && installedCount > 0) {
+        BadgedBox(
+            badge = {
+                Badge(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Text(installedCount.toString())
+                }
+            },
+        ) {
+            Icon(destination.icon, contentDescription = null)
+        }
+    } else {
+        Icon(destination.icon, contentDescription = null)
+    }
+}
+
+@Composable
+private fun AppNavHost(
+    navController: NavHostController,
+    viewModel: AppViewModel,
+    modifier: Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Destination.MODULES.route,
+        modifier = modifier,
+    ) {
+        composable(Destination.MODULES.route) {
+            RepoListScreen(
+                viewModel = viewModel,
+                onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+            )
+        }
+        composable(Destination.INSTALLED.route) {
+            InstalledScreen(
+                viewModel = viewModel,
+                onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+            )
+        }
+        composable(Destination.SETTINGS.route) {
+            SettingsScreen(viewModel)
+        }
+        composable("module/{packageName}") { entry ->
+            val packageName = entry.arguments?.getString("packageName").orEmpty()
+            ModuleDetailScreen(
+                viewModel = viewModel,
+                packageName = packageName,
+                onBack = {
+                    viewModel.closeModule()
+                    navController.popBackStack()
+                },
+            )
+        }
     }
 }
 
