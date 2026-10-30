@@ -98,12 +98,14 @@ import com.rushi.modulesmanager.data.formatDate
 import com.rushi.modulesmanager.data.stripHtml
 import com.rushi.modulesmanager.ui.components.EmptyState
 import com.rushi.modulesmanager.ui.components.LoadingState
+import com.rushi.modulesmanager.ui.components.MarkdownBlocks
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.favouriteColor
+import com.rushi.modulesmanager.ui.components.markdownPlainText
 import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.shortVersion
 import com.rushi.modulesmanager.ui.theme.amoledCardBorder
@@ -777,21 +779,33 @@ private fun ReleaseCard(
                     }
                 }
             }
-            val notes = stripHtml(release.descriptionHtml)
-            if (!notes.isNullOrBlank()) {
+            val rawNotes = release.descriptionHtml
+            val htmlNotes = remember(rawNotes) { rawNotes != null && looksLikeHtml(rawNotes) }
+            val plainNotes = remember(rawNotes, htmlNotes) {
+                rawNotes?.let { if (htmlNotes) stripHtml(it) else markdownPlainText(it) }
+            }
+            val markdownNotes = rawNotes.takeUnless { htmlNotes }
+            if (!plainNotes.isNullOrBlank()) {
                 var expanded by rememberSaveable { mutableStateOf(false) }
                 var canExpand by rememberSaveable { mutableStateOf(false) }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                    overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { layout ->
-                        if (!expanded && layout.hasVisualOverflow) canExpand = true
-                    },
-                )
+                if (expanded && markdownNotes != null) {
+                    MarkdownBlocks(
+                        markdown = markdownNotes,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text(
+                        text = plainNotes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (expanded) Int.MAX_VALUE else 4,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { layout ->
+                            if (!expanded && layout.hasVisualOverflow) canExpand = true
+                        },
+                    )
+                }
                 if (canExpand) {
                     TextButton(
                         onClick = { expanded = !expanded },
@@ -817,6 +831,13 @@ private fun ReleaseCard(
         }
     }
 }
+
+private val HTML_TAG = Regex(
+    "<\\s*/?\\s*(p|h[1-6]|ul|ol|li|div|br|img|a|strong|em|pre|code|table|tr|td|th|blockquote|span)\\b",
+    RegexOption.IGNORE_CASE,
+)
+
+private fun looksLikeHtml(value: String): Boolean = HTML_TAG.containsMatchIn(value)
 
 @Composable
 private fun AssetRow(asset: RepoAsset, onInstall: () -> Unit) {
