@@ -342,7 +342,12 @@ private fun FloatingNavItem(
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DestinationIcon(destination, installedCount, tint = content)
+        // The expanded label leaves no room for a badge; show it only on the icon-only tabs.
+        DestinationIcon(
+            destination = destination,
+            installedCount = if (selected) 0 else installedCount,
+            tint = content,
+        )
         AnimatedVisibility(
             visible = selected,
             enter = expandHorizontally() + fadeIn(),
