@@ -7,14 +7,15 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Versions up to 2.0.0 used `com.rushi.modulesmanager` and update separately.
 - ⬇️ [Latest release](https://github.com/rushiranpise/lsposed-modules-manager/releases)
 
-## What's new in 2.0
+## What's new in 2.2
 
-- A floating navigation pill with a gradient scrim, dynamic color, and a rail on tablets.
-- A Library tab for favourites, recently viewed modules, and skipped or ignored updates.
-- Per-update progress and cancel, pause and resume, retry after a dropped network, and 1 to 5 concurrent downloads.
-- A Diagnostics page with device and build details, cache sizes, copy and share, and cleanup actions.
-- The source picker now lists every repository the daily index holds for a package.
-- A new app icon.
+- Open every module by the same GitHub developer from **by <author>** on a module page or **More by <author>** in a card menu.
+- Cards now show an outlined package pill, a gold star count, a gray fork count, a red favourite heart and a source badge when the index lists several repositories.
+- Long descriptions expand with **Read more**. The card menu can copy the package name, open the releases list or open the developer page.
+- Module pages use Material 3 segmented tabs, show the author below the release date, and add an **Uninstall** action for installed modules.
+- AMOLED mode uses fully black cards, navigation pill and download banner with a hairline outline.
+- The Modules list reports when the index was last updated on launch and after a refresh.
+- Green version pills, gold star accents and outlined package pills throughout the app.
 
 ## Features
 
@@ -23,6 +24,10 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - See the installed version next to an available update. Each update row shows its own download percentage and can be cancelled without stopping the rest of the batch.
 - Pause and resume a module download, or let it retry after a dropped connection and continue from the bytes already on disk. Settings can limit the app to 1 to 5 concurrent downloads.
 - Open a module to read its README, its full GitHub release history and target apps.
+- Every module page links to the rest of that developer's modules, and the card menu offers the same action.
+- Card menus can copy the package name, open the repository's releases list or show the developer page.
+- The module page shows the package, author, star count, release date and version pills, with an Uninstall action for installed modules.
+- Long card descriptions expand with **Read more**; AMOLED mode gives cards, the navigation pill and the download banner a black background and a hairline outline.
 - The Releases tab lists every published release, stable and pre-release, with their APKs.
 - Translate module descriptions and READMEs, manually or automatically.
 - Install with the system installer, a PackageInstaller session, Shizuku, or root for silent installs. Installs handed to an external installer are remembered and confirmed on the next scan.
