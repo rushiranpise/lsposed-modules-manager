@@ -1,6 +1,7 @@
 package com.rushi.modulesmanager.ui
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandHorizontally
@@ -78,6 +79,7 @@ import com.rushi.modulesmanager.ui.screens.LibraryScreen
 import com.rushi.modulesmanager.ui.screens.ModuleDetailScreen
 import com.rushi.modulesmanager.ui.screens.RepoListScreen
 import com.rushi.modulesmanager.ui.screens.SettingsScreen
+import com.rushi.modulesmanager.ui.theme.LocalAmoled
 
 private enum class Destination(val route: String, val label: String, val icon: ImageVector) {
     MODULES("modules", "Modules", Icons.Outlined.Extension),
@@ -287,10 +289,16 @@ private fun FloatingNavBar(
             .padding(horizontal = 20.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val amoled = LocalAmoled.current
         Surface(
             shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = if (amoled) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            border = if (amoled) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            } else {
+                null
+            },
             tonalElevation = 0.dp,
             shadowElevation = 6.dp,
         ) {

@@ -58,6 +58,7 @@ import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.formatBytes
+import com.rushi.modulesmanager.ui.theme.LocalAmoled
 import java.util.Locale
 
 @Composable
@@ -380,9 +381,15 @@ fun DownloadBanner(
     onPause: () -> Unit,
     onResume: () -> Unit,
 ) {
+    val amoled = LocalAmoled.current
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = if (amoled) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        border = if (amoled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
         tonalElevation = 3.dp,
     ) {
         Column(
