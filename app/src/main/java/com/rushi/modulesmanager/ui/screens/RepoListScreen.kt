@@ -375,6 +375,15 @@ fun RepoListScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (showScrollToTop) {
+                        FloatingActionButton(
+                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        }
+                    }
                     FloatingActionButton(
                         onClick = {
                             scope.launch { listState.scrollToItem(0) }
@@ -445,15 +454,6 @@ fun RepoListScreen(
                                 },
                                 onClick = { viewModel.setUpdatesFirst(!updatesFirst) },
                             )
-                        }
-                    }
-                    if (showScrollToTop) {
-                        FloatingActionButton(
-                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ) {
-                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
                         }
                     }
                 }

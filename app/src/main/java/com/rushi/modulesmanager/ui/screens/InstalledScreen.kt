@@ -364,6 +364,15 @@ fun InstalledScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (showScrollToTop) {
+                        FloatingActionButton(
+                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        }
+                    }
                     FloatingActionButton(
                         onClick = {
                             scope.launch { listState.scrollToItem(0) }
@@ -376,15 +385,6 @@ fun InstalledScreen(
                             Icons.Outlined.Refresh,
                             contentDescription = "Rescan installed modules",
                         )
-                    }
-                    if (showScrollToTop) {
-                        FloatingActionButton(
-                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ) {
-                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
-                        }
                     }
                 }
                 }
