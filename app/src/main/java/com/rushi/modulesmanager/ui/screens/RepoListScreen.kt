@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AssistChip
@@ -409,6 +411,29 @@ fun RepoListScreen(
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                            val showShelves = query.isBlank() && filter == RepoFilter.ALL
+                            if (showShelves) {
+                                item(key = "shelf-updated") {
+                                    ModuleShelf(
+                                        title = "Recently updated",
+                                        modules = searched.sortedByDescending {
+                                            parseInstant(it.latestTime(channel)) ?: Instant.EPOCH
+                                        }.take(8),
+                                        channel = channel,
+                                        onOpen = onOpenModule,
+                                    )
+                                }
+                                item(key = "shelf-starred") {
+                                    ModuleShelf(
+                                        title = "Most starred",
+                                        modules = searched.sortedByDescending { it.stargazerCount }
+                                            .take(8),
+                                        channel = channel,
+                                        onOpen = onOpenModule,
+                                        showStars = true,
+                                    )
+                                }
+                            }
                             items(filtered, key = { it.packageName }) { module ->
                                 ModuleCard(
                                     module = module,
@@ -463,6 +488,78 @@ fun RepoListScreen(
         }
     }
 
+}
+
+/** A compact horizontal row of modules above the full list. */
+@Composable
+private fun ModuleShelf(
+    title: String,
+    modules: List<RepoModule>,
+    channel: UpdateChannel,
+    onOpen: (String) -> Unit,
+    showStars: Boolean = false,
+) {
+    if (modules.isEmpty()) return
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 4.dp),
+        ) {
+            items(modules, key = { it.packageName }) { module ->
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                    modifier = Modifier
+                        .width(158.dp)
+                        .clickable { onOpen(module.packageName) },
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        ModuleAvatar(module, size = 34.dp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = module.displayName,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (showStars) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    text = module.stargazerCount.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                val time = parseInstant(module.latestTime(channel))
+                                Text(
+                                    text = time?.toEpochMilli()?.let(::formatRelativeTime)
+                                        ?: "No release",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** The description line, swapped for its translation while one is showing. */
