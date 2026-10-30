@@ -96,8 +96,8 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         appendLine("Installed modules: ${installed.size}")
         appendLine("Repository modules: ${modules.size}")
         appendLine("Updates available: ${updates.size}")
-        appendLine("Index and README cache: ${formatBytes(stats.index + stats.readme)}")
-        appendLine("Downloaded APKs: ${formatBytes(stats.apks)}")
+        appendLine("Index and README cache: ${formatStorage(stats.index + stats.readme)}")
+        appendLine("Downloaded APKs: ${formatStorage(stats.apks)}")
     }.trimEnd()
 
     fun refreshStorage() {
@@ -193,7 +193,7 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
             StorageRow(
                 title = "Index and README cache",
-                detail = formatBytes(stats.index + stats.readme),
+                detail = formatStorage(stats.index + stats.readme),
                 onClear = {
                     viewModel.clearIndexCache()
                     refreshStorage()
@@ -201,7 +201,7 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             )
             StorageRow(
                 title = "Downloaded APKs",
-                detail = formatBytes(stats.apks),
+                detail = formatStorage(stats.apks),
                 onClear = {
                     viewModel.clearDownloadedApks()
                     refreshStorage()
@@ -216,6 +216,10 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         }
     }
 }
+
+/** Storage totals are a real zero when the folder is empty, unlike an unknown download size. */
+private fun formatStorage(bytes: Long): String =
+    if (bytes <= 0L) "0 B" else formatBytes(bytes)
 
 @Composable
 private fun StorageRow(title: String, detail: String, onClear: () -> Unit) {
