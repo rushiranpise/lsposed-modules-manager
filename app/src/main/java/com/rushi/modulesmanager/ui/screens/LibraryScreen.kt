@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
@@ -22,8 +23,6 @@ import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -94,36 +93,32 @@ fun LibraryScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Library") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                SecondaryTabRow(selectedTabIndex = selectedTab.ordinal) {
-                    LibraryTab.entries.forEachIndexed { index, item ->
-                        Tab(
-                            selected = selectedTab.ordinal == index,
-                            onClick = { tab = index },
-                            text = {
-                                TabLabel(
-                                    text = item.label,
-                                    count = tabCounts[index],
-                                    selected = selectedTab.ordinal == index,
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        },
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .statusBarsPadding(),
+        ) {
+            SecondaryTabRow(selectedTabIndex = selectedTab.ordinal) {
+                LibraryTab.entries.forEachIndexed { index, item ->
+                    Tab(
+                        selected = selectedTab.ordinal == index,
+                        onClick = { tab = index },
+                        text = {
+                            TabLabel(
+                                text = item.label,
+                                count = tabCounts[index],
+                                selected = selectedTab.ordinal == index,
+                            )
+                        },
+                    )
+                }
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -178,6 +173,7 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
         }
     }
 }

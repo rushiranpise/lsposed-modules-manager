@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,10 +47,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -75,7 +75,6 @@ import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.ui.components.CountedFilterChip
 import com.rushi.modulesmanager.ui.components.EmptyState
-import com.rushi.modulesmanager.ui.components.HeaderDivider
 import com.rushi.modulesmanager.ui.components.InstalledAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StatusPill
@@ -185,30 +184,12 @@ fun InstalledScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Installed") },
-                    actions = {
-                        IconButton(onClick = {
-                            scope.launch { listState.scrollToItem(0) }
-                            viewModel.rescan(showMessage = true)
-                        }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Rescan installed modules")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                HeaderDivider()
-            }
-        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
             OutlinedTextField(
                 value = query,
@@ -374,17 +355,35 @@ fun InstalledScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
-                if (showScrollToTop) {
-                    FloatingActionButton(
-                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .padding(end = 16.dp, bottom = 98.dp),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 98.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            scope.launch { listState.scrollToItem(0) }
+                            viewModel.rescan(showMessage = true)
+                        },
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
-                        Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        Icon(
+                            Icons.Outlined.Refresh,
+                            contentDescription = "Rescan installed modules",
+                        )
+                    }
+                    if (showScrollToTop) {
+                        FloatingActionButton(
+                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        }
                     }
                 }
             }

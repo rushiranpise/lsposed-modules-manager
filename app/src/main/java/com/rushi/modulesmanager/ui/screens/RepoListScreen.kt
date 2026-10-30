@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,11 +46,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,7 +81,6 @@ import com.rushi.modulesmanager.ui.components.CountedFilterChip
 import com.rushi.modulesmanager.ui.components.EmptyState
 import com.rushi.modulesmanager.ui.components.ErrorBanner
 import com.rushi.modulesmanager.ui.components.ForkBadge
-import com.rushi.modulesmanager.ui.components.HeaderDivider
 import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
@@ -194,103 +193,12 @@ fun RepoListScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text("Modules")
-                            dataUpdatedAt?.let { timestamp ->
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "Updated ${formatRelativeTime(timestamp)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(bottom = 2.dp),
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    actions = {
-                        IconButton(onClick = {
-                            scope.launch { listState.scrollToItem(0) }
-                            viewModel.refresh()
-                        }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
-                        }
-                        Box {
-                            IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort")
-                            }
-                            DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Sort by name") },
-                                    leadingIcon = {
-                                        if (sortMode == SortMode.NAME) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
-                                    },
-                                    onClick = {
-                                        viewModel.setSortMode(SortMode.NAME)
-                                        showSortMenu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Sort by last update") },
-                                    leadingIcon = {
-                                        if (sortMode == SortMode.UPDATED) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
-                                    },
-                                    onClick = {
-                                        viewModel.setSortMode(SortMode.UPDATED)
-                                        showSortMenu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Sort by recently added") },
-                                    leadingIcon = {
-                                        if (sortMode == SortMode.ADDED) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
-                                    },
-                                    onClick = {
-                                        viewModel.setSortMode(SortMode.ADDED)
-                                        showSortMenu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Sort by stars") },
-                                    leadingIcon = {
-                                        if (sortMode == SortMode.STARS) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
-                                    },
-                                    onClick = {
-                                        viewModel.setSortMode(SortMode.STARS)
-                                        showSortMenu = false
-                                    },
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Updates first") },
-                                    leadingIcon = {
-                                        Checkbox(
-                                            checked = updatesFirst,
-                                            onCheckedChange = null,
-                                        )
-                                    },
-                                    onClick = { viewModel.setUpdatesFirst(!updatesFirst) },
-                                )
-                            }
-                        }
-                    },
-                )
-                HeaderDivider()
-            }
-        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
             OutlinedTextField(
                 value = query,
@@ -458,17 +366,94 @@ fun RepoListScreen(
                 val showScrollToTop by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 0 }
                 }
-                if (showScrollToTop) {
-                    FloatingActionButton(
-                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .padding(end = 16.dp, bottom = 98.dp),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 98.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            scope.launch { listState.scrollToItem(0) }
+                            viewModel.refresh()
+                        },
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
-                        Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
+                    }
+                    Box {
+                        SmallFloatingActionButton(
+                            onClick = { showSortMenu = true },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ) {
+                            Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sort")
+                        }
+                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Sort by name") },
+                                leadingIcon = {
+                                    if (sortMode == SortMode.NAME) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                },
+                                onClick = {
+                                    viewModel.setSortMode(SortMode.NAME)
+                                    showSortMenu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sort by last update") },
+                                leadingIcon = {
+                                    if (sortMode == SortMode.UPDATED) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                },
+                                onClick = {
+                                    viewModel.setSortMode(SortMode.UPDATED)
+                                    showSortMenu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sort by recently added") },
+                                leadingIcon = {
+                                    if (sortMode == SortMode.ADDED) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                },
+                                onClick = {
+                                    viewModel.setSortMode(SortMode.ADDED)
+                                    showSortMenu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sort by stars") },
+                                leadingIcon = {
+                                    if (sortMode == SortMode.STARS) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                },
+                                onClick = {
+                                    viewModel.setSortMode(SortMode.STARS)
+                                    showSortMenu = false
+                                },
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Updates first") },
+                                leadingIcon = {
+                                    Checkbox(
+                                        checked = updatesFirst,
+                                        onCheckedChange = null,
+                                    )
+                                },
+                                onClick = { viewModel.setUpdatesFirst(!updatesFirst) },
+                            )
+                        }
+                    }
+                    if (showScrollToTop) {
+                        FloatingActionButton(
+                            onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Scroll to top")
+                        }
                     }
                 }
             }
