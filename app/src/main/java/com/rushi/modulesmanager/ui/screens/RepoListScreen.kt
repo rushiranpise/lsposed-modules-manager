@@ -98,6 +98,7 @@ import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import kotlinx.coroutines.launch
@@ -571,17 +572,18 @@ private fun ModuleShelf(
                         Spacer(Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (showStars) {
+                                val gold = starAccentColor()
                                 Icon(
                                     imageVector = Icons.Outlined.Star,
                                     contentDescription = null,
                                     modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = gold,
                                 )
                                 Spacer(Modifier.width(3.dp))
                                 Text(
                                     text = module.stargazerCount.toString(),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = gold,
                                 )
                             } else {
                                 val time = parseInstant(module.latestTime(channel))

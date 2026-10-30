@@ -172,9 +172,14 @@ fun VersionPill(text: String) {
 }
 
 @Composable
-fun StarBadge(count: Int, modifier: Modifier = Modifier) {
+fun starAccentColor(): Color {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val gold = if (dark) Color(0xFFE3B341) else Color(0xFF9A6700)
+    return if (dark) Color(0xFFE3B341) else Color(0xFF9A6700)
+}
+
+@Composable
+fun StarBadge(count: Int, modifier: Modifier = Modifier) {
+    val gold = starAccentColor()
     CountBadge(
         count = count,
         imageVector = Icons.Outlined.Star,
