@@ -96,6 +96,7 @@ private enum class InstalledFilter { ALL, UPDATES, SKIPPED, UNTRACKED }
 fun InstalledScreen(
     viewModel: AppViewModel,
     onOpenModule: (String) -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
@@ -343,6 +344,7 @@ fun InstalledScreen(
                                 onToggleIgnore = { repoModule?.let(viewModel::toggleIgnoreUpdates) },
                                 onTogglePreRelease = { repoModule?.let(viewModel::togglePreReleases) },
                                 onAppInfo = { viewModel.openAppInfo(module.packageName) },
+                                onOpenDeveloper = onOpenDeveloper,
                                 onLinkModule = { linkingModule = module },
                                 onUnlinkModule = { viewModel.unlinkModule(module.packageName) },
                                 linked = linked,
@@ -503,6 +505,7 @@ private fun InstalledCard(
     onAppInfo: () -> Unit,
     onLinkModule: () -> Unit,
     onUnlinkModule: () -> Unit,
+    onOpenDeveloper: (String) -> Unit,
     linked: Boolean,
     onUninstall: () -> Unit,
 ) {
@@ -616,6 +619,15 @@ private fun InstalledCard(
                                     onClick = {
                                         menuOpen = false
                                         onTogglePreRelease()
+                                    },
+                                )
+                            }
+                            repoModule?.developerLogin()?.let { developer ->
+                                DropdownMenuItem(
+                                    text = { Text("All modules by $developer") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onOpenDeveloper(developer)
                                     },
                                 )
                             }

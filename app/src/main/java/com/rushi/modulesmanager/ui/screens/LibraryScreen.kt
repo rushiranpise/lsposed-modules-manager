@@ -64,6 +64,7 @@ private enum class LibraryTab(val label: String, val icon: ImageVector) {
 fun LibraryScreen(
     viewModel: AppViewModel,
     onOpenModule: (String) -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val recentlyViewed by viewModel.recentlyViewed.collectAsStateWithLifecycle()
@@ -242,6 +243,7 @@ fun LibraryScreen(
                             sourceCount = sourceAlternatives[packageName]?.size ?: 1,
                             favourite = packageName in favourites,
                             onToggleFavourite = { viewModel.toggleFavourite(packageName) },
+                            onOpenDeveloper = onOpenDeveloper,
                             onClick = { onOpenModule(packageName) },
                         )
                     }

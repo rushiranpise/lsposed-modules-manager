@@ -407,18 +407,27 @@ private fun AppNavHost(
             RepoListScreen(
                 viewModel = viewModel,
                 onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+                onOpenDeveloper = { developer ->
+                    navController.navigate("developer/${Uri.encode(developer)}")
+                },
             )
         }
         composable(Destination.INSTALLED.route) {
             InstalledScreen(
                 viewModel = viewModel,
                 onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+                onOpenDeveloper = { developer ->
+                    navController.navigate("developer/${Uri.encode(developer)}")
+                },
             )
         }
         composable(Destination.LIBRARY.route) {
             LibraryScreen(
                 viewModel = viewModel,
                 onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+                onOpenDeveloper = { developer ->
+                    navController.navigate("developer/${Uri.encode(developer)}")
+                },
             )
         }
         composable(Destination.SETTINGS.route) {
@@ -440,6 +449,9 @@ private fun AppNavHost(
                 developer = developer,
                 onBack = { navController.popBackStack() },
                 onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+                onOpenDeveloper = { owner ->
+                    navController.navigate("developer/${Uri.encode(owner)}")
+                },
             )
         }
         composable("module/{packageName}") { entry ->

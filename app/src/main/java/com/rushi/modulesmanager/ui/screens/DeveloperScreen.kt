@@ -41,6 +41,7 @@ fun DeveloperScreen(
     developer: String,
     onBack: () -> Unit,
     onOpenModule: (String) -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val manualModules by viewModel.manualModules.collectAsStateWithLifecycle()
@@ -142,6 +143,7 @@ fun DeveloperScreen(
                         sourceCount = sourceAlternatives[packageName]?.size ?: 1,
                         favourite = packageName in favourites,
                         onToggleFavourite = { viewModel.toggleFavourite(packageName) },
+                        onOpenDeveloper = onOpenDeveloper,
                         onClick = { onOpenModule(packageName) },
                     )
                 }

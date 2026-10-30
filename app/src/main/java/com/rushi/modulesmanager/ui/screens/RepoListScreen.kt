@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
@@ -109,6 +110,7 @@ private enum class RepoFilter(val label: String) {
 fun RepoListScreen(
     viewModel: AppViewModel,
     onOpenModule: (String) -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val channel by viewModel.channel.collectAsStateWithLifecycle()
@@ -358,6 +360,7 @@ fun RepoListScreen(
                                     onToggleFavourite = {
                                         viewModel.toggleFavourite(module.packageName)
                                     },
+                                    onOpenDeveloper = onOpenDeveloper,
                                     onClick = { onOpenModule(module.packageName) },
                                 )
                             }
@@ -668,9 +671,11 @@ internal fun ModuleCard(
     sourceCount: Int = 1,
     favourite: Boolean,
     onToggleFavourite: () -> Unit,
+    onOpenDeveloper: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     var descriptionExpanded by rememberSaveable(module.packageName) { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
@@ -708,6 +713,33 @@ internal fun ModuleCard(
                             )
                         }
                         Spacer(Modifier.width(2.dp))
+                    }
+                    val developer = module.developerLogin()
+                    if (developer != null) {
+                        Box {
+                            IconButton(
+                                onClick = { menuOpen = true },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.MoreVert,
+                                    contentDescription = "More actions",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuOpen,
+                                onDismissRequest = { menuOpen = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("All modules by $developer") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onOpenDeveloper(developer)
+                                    },
+                                )
+                            }
+                        }
                     }
                     IconButton(
                         onClick = onToggleFavourite,
