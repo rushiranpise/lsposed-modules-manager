@@ -1,5 +1,6 @@
 package com.rushi.modulesmanager.ui
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandHorizontally
@@ -70,6 +71,7 @@ import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.DownloadBanner
+import com.rushi.modulesmanager.ui.screens.DeveloperScreen
 import com.rushi.modulesmanager.ui.screens.DiagnosticsScreen
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
 import com.rushi.modulesmanager.ui.screens.LibraryScreen
@@ -95,7 +97,8 @@ fun AppRoot(viewModel: AppViewModel) {
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute != null &&
         currentRoute != "diagnostics" &&
-        !currentRoute.startsWith("module/")
+        !currentRoute.startsWith("module/") &&
+        !currentRoute.startsWith("developer/")
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
@@ -430,6 +433,15 @@ private fun AppNavHost(
                 onBack = { navController.popBackStack() },
             )
         }
+        composable("developer/{developer}") { entry ->
+            val developer = entry.arguments?.getString("developer").orEmpty()
+            DeveloperScreen(
+                viewModel = viewModel,
+                developer = developer,
+                onBack = { navController.popBackStack() },
+                onOpenModule = { packageName -> navController.navigate("module/$packageName") },
+            )
+        }
         composable("module/{packageName}") { entry ->
             val packageName = entry.arguments?.getString("packageName").orEmpty()
             ModuleDetailScreen(
@@ -438,6 +450,9 @@ private fun AppNavHost(
                 onBack = {
                     viewModel.closeModule()
                     navController.popBackStack()
+                },
+                onOpenDeveloper = { developer ->
+                    navController.navigate("developer/${Uri.encode(developer)}")
                 },
             )
         }

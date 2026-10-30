@@ -107,6 +107,7 @@ fun ModuleDetailScreen(
     viewModel: AppViewModel,
     packageName: String,
     onBack: () -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     val loading by viewModel.detailLoading.collectAsStateWithLifecycle()
@@ -277,6 +278,7 @@ fun ModuleDetailScreen(
                 },
                 onOpenModule = { viewModel.openInstalledModule(packageName) },
                 onOpenAppInfo = { viewModel.openAppInfo(packageName) },
+                onOpenDeveloper = onOpenDeveloper,
             )
 
             PrimaryTabRow(selectedTabIndex = tab) {
@@ -436,6 +438,7 @@ private fun DetailHeader(
     onInstall: () -> Unit,
     onOpenModule: () -> Unit,
     onOpenAppInfo: () -> Unit,
+    onOpenDeveloper: (String) -> Unit,
 ) {
     val updateVersion = update?.version
     val hasUpdate = updateVersion != null
@@ -465,6 +468,16 @@ private fun DetailHeader(
                 )
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
+                module.developerLogin()?.let { developer ->
+                    Text(
+                        text = "by $developer",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = 3.dp)
+                            .clickable { onOpenDeveloper(developer) },
+                    )
+                }
                 Spacer(Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

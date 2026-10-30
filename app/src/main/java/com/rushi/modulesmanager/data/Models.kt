@@ -228,6 +228,17 @@ data class RepoModule(
         readmeHtml = null,
     )
 
+    /** GitHub owner used to group this module with the rest of the developer's work. */
+    fun developerLogin(): String? {
+        val owner = collaborators.firstOrNull { it.login.isNotBlank() }?.login
+            ?: githubRepoFullName()?.substringBefore('/')
+            ?: return null
+        if (owner.lowercase() in setOf("releases", "apps", "xposed-modules-repo", "lsposed")) {
+            return null
+        }
+        return owner
+    }
+
     /** GitHub owner of the module, used for its avatar. */
     fun avatarUrl(): String? {
         val candidate = sourceUrl ?: url ?: homepageUrl ?: return null
