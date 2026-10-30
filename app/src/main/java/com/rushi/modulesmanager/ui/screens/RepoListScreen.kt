@@ -168,30 +168,24 @@ fun RepoListScreen(
         if (filtersReady) listState.scrollToItem(0) else filtersReady = true
     }
 
-    // A new index file means the restored position belongs to older data.
+    // A new index file means the restored position belongs to older data, and the
+    // update time is worth announcing on launch and after a refresh.
     var lastDataStamp by rememberSaveable { mutableStateOf<Long?>(null) }
+    val context = LocalContext.current
     LaunchedEffect(dataUpdatedAt) {
         val stamp = dataUpdatedAt ?: return@LaunchedEffect
         val previous = lastDataStamp
         if (previous != null && stamp != previous) {
             listState.scrollToItem(0)
         }
-        lastDataStamp = stamp
-    }
-
-    // The header used to carry this; show it once on launch instead.
-    var updateToastShown by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
-    LaunchedEffect(dataUpdatedAt) {
-        val stamp = dataUpdatedAt ?: return@LaunchedEffect
-        if (!updateToastShown) {
-            updateToastShown = true
+        if (previous == null || stamp != previous) {
             Toast.makeText(
                 context,
                 "List updated ${formatRelativeTime(stamp)}",
                 Toast.LENGTH_SHORT,
             ).show()
         }
+        lastDataStamp = stamp
     }
 
     val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
