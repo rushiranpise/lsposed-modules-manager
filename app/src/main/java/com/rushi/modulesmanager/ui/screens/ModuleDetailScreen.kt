@@ -8,6 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.RadioButton
@@ -282,6 +286,7 @@ fun ModuleDetailScreen(
                 },
                 onOpenModule = { viewModel.openInstalledModule(packageName) },
                 onOpenAppInfo = { viewModel.openAppInfo(packageName) },
+                onUninstall = { viewModel.uninstall(packageName) },
                 onOpenDeveloper = onOpenDeveloper,
             )
 
@@ -454,6 +459,7 @@ private fun DetailHeader(
     onInstall: () -> Unit,
     onOpenModule: () -> Unit,
     onOpenAppInfo: () -> Unit,
+    onUninstall: () -> Unit,
     onOpenDeveloper: (String) -> Unit,
 ) {
     val updateVersion = update?.version
@@ -547,6 +553,30 @@ private fun DetailHeader(
                 Spacer(Modifier.width(8.dp))
             }
             Text(primaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        if (isInstalled) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onUninstall,
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Uninstall")
+            }
         }
     }
 }
