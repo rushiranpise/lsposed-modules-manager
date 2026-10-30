@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AssistChip
@@ -119,6 +120,7 @@ fun RepoListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
+    val favourites by viewModel.favourites.collectAsStateWithLifecycle()
 
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RepoFilter.ALL) }
@@ -454,6 +456,10 @@ fun RepoListScreen(
                                     ),
                                     onTranslate = { viewModel.translate(module) },
                                     onShowOriginal = { viewModel.showOriginal(module) },
+                                    favourite = module.packageName in favourites,
+                                    onToggleFavourite = {
+                                        viewModel.toggleFavourite(module.packageName)
+                                    },
                                     onClick = { onOpenModule(module.packageName) },
                                 )
                             }
@@ -624,6 +630,8 @@ private fun ModuleCard(
     showTranslate: Boolean,
     onTranslate: () -> Unit,
     onShowOriginal: () -> Unit,
+    favourite: Boolean,
+    onToggleFavourite: () -> Unit,
     onClick: () -> Unit,
 ) {
     Card(
@@ -642,12 +650,38 @@ private fun ModuleCard(
             }
             Spacer(Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = module.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = module.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = onToggleFavourite,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (favourite) {
+                                Icons.Outlined.Star
+                            } else {
+                                Icons.Outlined.StarBorder
+                            },
+                            contentDescription = if (favourite) {
+                                "Remove from favourites"
+                            } else {
+                                "Add to favourites"
+                            },
+                            tint = if (favourite) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 PackageLabel(module.packageName)
                 module.summary?.takeIf { it.isNotBlank() }?.let { summary ->
