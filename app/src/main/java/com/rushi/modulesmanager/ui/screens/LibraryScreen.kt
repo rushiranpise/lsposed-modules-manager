@@ -11,17 +11,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,17 +102,47 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
         ) {
-            SecondaryTabRow(selectedTabIndex = selectedTab.ordinal) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
                 LibraryTab.entries.forEachIndexed { index, item ->
-                    Tab(
+                    SegmentedButton(
                         selected = selectedTab.ordinal == index,
                         onClick = { tab = index },
-                        text = {
-                            TabLabel(
-                                text = item.label,
-                                count = tabCounts[index],
-                                selected = selectedTab.ordinal == index,
-                            )
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = LibraryTab.entries.size,
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(item.label)
+                                Surface(
+                                    shape = CircleShape,
+                                    color = LocalContentColor.current.copy(alpha = 0.15f),
+                                    contentColor = LocalContentColor.current,
+                                ) {
+                                    Text(
+                                        text = tabCounts[index].toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(
+                                            horizontal = 6.dp,
+                                            vertical = 1.dp,
+                                        ),
+                                    )
+                                }
+                            }
                         },
                     )
                 }
@@ -174,35 +206,6 @@ fun LibraryScreen(
                 }
             }
         }
-        }
-    }
-}
-
-@Composable
-private fun TabLabel(text: String, count: Int, selected: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(text)
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHighest
-            },
-            contentColor = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-            )
         }
     }
 }
