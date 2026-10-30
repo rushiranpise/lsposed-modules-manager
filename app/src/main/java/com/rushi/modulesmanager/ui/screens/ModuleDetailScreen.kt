@@ -53,9 +53,10 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Tab
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -107,6 +108,7 @@ import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 
 private val tabs = listOf("Overview", "Releases", "Information")
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModuleDetailScreen(
     viewModel: AppViewModel,
@@ -286,12 +288,24 @@ fun ModuleDetailScreen(
                 onOpenDeveloper = onOpenDeveloper,
             )
 
-            PrimaryTabRow(selectedTabIndex = tab) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
                 tabs.forEachIndexed { index, title ->
-                    Tab(
+                    SegmentedButton(
                         selected = tab == index,
                         onClick = { tab = index },
-                        text = { Text(title) },
+                        shape = SegmentedButtonDefaults.itemShape(index, tabs.size),
+                        modifier = Modifier.weight(1f),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            inactiveContainerColor = amoledCardContainerColor(),
+                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        label = { Text(title) },
                     )
                 }
             }
