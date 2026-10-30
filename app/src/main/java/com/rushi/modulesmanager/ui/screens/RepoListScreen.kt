@@ -587,8 +587,14 @@ private fun ModuleShelf(
 
 /** The description line, swapped for its translation while one is showing. */
 @Composable
-private fun DescriptionBlock(summary: String, translation: TranslationState?) {
+private fun DescriptionBlock(
+    summary: String,
+    translation: TranslationState?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
     val translated = translation?.text
+    var canExpand by remember(summary, translated) { mutableStateOf(false) }
     Spacer(Modifier.height(6.dp))
     Text(
         text = translated ?: summary,
@@ -598,9 +604,22 @@ private fun DescriptionBlock(summary: String, translation: TranslationState?) {
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        maxLines = 2,
+        maxLines = if (expanded) Int.MAX_VALUE else 2,
         overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout ->
+            if (!expanded) canExpand = layout.hasVisualOverflow
+        },
     )
+    if (canExpand || expanded) {
+        Text(
+            text = if (expanded) "Show less" else "Read more",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clickable(onClick = onToggle),
+        )
+    }
 }
 
 /** The translate toggle shown beside the date. */
@@ -652,6 +671,7 @@ internal fun ModuleCard(
     onToggleFavourite: () -> Unit,
     onClick: () -> Unit,
 ) {
+    var descriptionExpanded by rememberSaveable(module.packageName) { mutableStateOf(false) }
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
@@ -717,7 +737,12 @@ internal fun ModuleCard(
                 Spacer(Modifier.height(2.dp))
                 PackageLabel(module.packageName)
                 module.summary?.takeIf { it.isNotBlank() }?.let { summary ->
-                    DescriptionBlock(summary = summary, translation = translation)
+                    DescriptionBlock(
+                        summary = summary,
+                        translation = translation,
+                        expanded = descriptionExpanded,
+                        onToggle = { descriptionExpanded = !descriptionExpanded },
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(
