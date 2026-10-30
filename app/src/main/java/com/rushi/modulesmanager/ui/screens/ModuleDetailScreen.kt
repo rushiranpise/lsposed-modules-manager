@@ -30,13 +30,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -148,9 +148,9 @@ fun ModuleDetailScreen(
                     IconButton(onClick = { viewModel.toggleFavourite(packageName) }) {
                         Icon(
                             imageVector = if (packageName in favourites) {
-                                Icons.Outlined.Star
+                                Icons.Filled.Favorite
                             } else {
-                                Icons.Outlined.StarBorder
+                                Icons.Outlined.FavoriteBorder
                             },
                             contentDescription = if (packageName in favourites) {
                                 "Remove from favourites"

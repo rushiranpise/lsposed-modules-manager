@@ -12,8 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -135,9 +135,9 @@ fun LibraryScreen(
                 item(key = "empty-${tab}") {
                     when (LibraryTab.entries[tab]) {
                         LibraryTab.FAVOURITES -> EmptyState(
-                            icon = Icons.Outlined.Star,
+                            icon = Icons.Outlined.FavoriteBorder,
                             title = "No favourites yet",
-                            body = "Tap the star on a module card or module page to keep it here.",
+                            body = "Tap the heart on a module card or module page to keep it here.",
                         )
                         LibraryTab.RECENT -> EmptyState(
                             icon = Icons.Outlined.History,

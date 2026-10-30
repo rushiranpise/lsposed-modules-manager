@@ -21,15 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.Card
@@ -393,6 +394,8 @@ fun RepoListScreen(
                                             parseInstant(it.latestTime(channel)) ?: Instant.EPOCH
                                         }.take(8),
                                         channel = channel,
+                                        favourites = favourites,
+                                        onToggleFavourite = viewModel::toggleFavourite,
                                         onOpen = onOpenModule,
                                     )
                                 }
@@ -402,6 +405,8 @@ fun RepoListScreen(
                                         modules = searched.sortedByDescending { it.stargazerCount }
                                             .take(8),
                                         channel = channel,
+                                        favourites = favourites,
+                                        onToggleFavourite = viewModel::toggleFavourite,
                                         onOpen = onOpenModule,
                                         showStars = true,
                                     )
@@ -473,6 +478,8 @@ private fun ModuleShelf(
     title: String,
     modules: List<RepoModule>,
     channel: UpdateChannel,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     onOpen: (String) -> Unit,
     showStars: Boolean = false,
 ) {
@@ -498,7 +505,34 @@ private fun ModuleShelf(
                         .clickable { onOpen(module.packageName) },
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        ModuleAvatar(module, size = 34.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ModuleAvatar(module, size = 34.dp)
+                            Spacer(Modifier.weight(1f))
+                            val favourite = module.packageName in favourites
+                            IconButton(
+                                onClick = { onToggleFavourite(module.packageName) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (favourite) {
+                                        Icons.Filled.Favorite
+                                    } else {
+                                        Icons.Outlined.FavoriteBorder
+                                    },
+                                    contentDescription = if (favourite) {
+                                        "Remove from favourites"
+                                    } else {
+                                        "Add to favourites"
+                                    },
+                                    tint = if (favourite) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = module.displayName,
@@ -635,9 +669,9 @@ internal fun ModuleCard(
                     ) {
                         Icon(
                             imageVector = if (favourite) {
-                                Icons.Outlined.Star
+                                Icons.Filled.Favorite
                             } else {
-                                Icons.Outlined.StarBorder
+                                Icons.Outlined.FavoriteBorder
                             },
                             contentDescription = if (favourite) {
                                 "Remove from favourites"
