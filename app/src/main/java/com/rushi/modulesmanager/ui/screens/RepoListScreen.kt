@@ -179,6 +179,21 @@ fun RepoListScreen(
         lastDataStamp = stamp
     }
 
+    // The header used to carry this; show it once on launch instead.
+    var updateToastShown by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    LaunchedEffect(dataUpdatedAt) {
+        val stamp = dataUpdatedAt ?: return@LaunchedEffect
+        if (!updateToastShown) {
+            updateToastShown = true
+            Toast.makeText(
+                context,
+                "List updated ${formatRelativeTime(stamp)}",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
     val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
         val matched = when (filter) {
             RepoFilter.ALL -> searched
