@@ -98,6 +98,7 @@ import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.favouriteColor
 import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
@@ -557,7 +558,7 @@ private fun ModuleShelf(
                                         "Add to favourites"
                                     },
                                     tint = if (favourite) {
-                                        MaterialTheme.colorScheme.primary
+                                        favouriteColor()
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -805,7 +806,7 @@ internal fun ModuleCard(
                                 "Add to favourites"
                             },
                             tint = if (favourite) {
-                                MaterialTheme.colorScheme.primary
+                                favouriteColor()
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },

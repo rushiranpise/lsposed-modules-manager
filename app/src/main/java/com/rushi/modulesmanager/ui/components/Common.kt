@@ -178,6 +178,12 @@ fun starAccentColor(): Color {
 }
 
 @Composable
+fun favouriteColor(): Color {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (dark) Color(0xFFF85149) else Color(0xFFCF222E)
+}
+
+@Composable
 fun StarBadge(count: Int, modifier: Modifier = Modifier) {
     val gold = starAccentColor()
     CountBadge(

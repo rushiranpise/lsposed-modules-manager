@@ -98,6 +98,7 @@ import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.favouriteColor
 import com.rushi.modulesmanager.ui.components.shortVersion
 import com.rushi.modulesmanager.ui.theme.amoledCardBorder
 import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
@@ -166,7 +167,7 @@ fun ModuleDetailScreen(
                                 "Add to favourites"
                             },
                             tint = if (packageName in favourites) {
-                                MaterialTheme.colorScheme.primary
+                                favouriteColor()
                             } else {
                                 LocalContentColor.current
                             },
