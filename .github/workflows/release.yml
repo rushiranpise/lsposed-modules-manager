@@ -94,3 +94,40 @@ jobs:
               --title "Modules Manager ${TAG}" \
               --notes-file release-notes.md
           fi
+
+      - name: Check LSPosed module repository token
+        id: module_repo
+        env:
+          MODULE_REPO_TOKEN: ${{ secrets.MODULE_REPO_TOKEN }}
+        run: |
+          if [ -n "$MODULE_REPO_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::MODULE_REPO_TOKEN is not set; skipping the LSPosed module repository release."
+          fi
+
+      - name: Publish to LSPosed module repository
+        if: steps.module_repo.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.MODULE_REPO_TOKEN }}
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          VERSION_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          test -n "$VERSION_NAME"
+          test -n "$VERSION_CODE"
+          MODULE_TAG="${VERSION_CODE}-${VERSION_NAME}"
+          REPO="Xposed-Modules-Repo/io.github.rushiranpise.modulesmanager"
+          ASSET="artifacts/ModulesManager-${MODULE_TAG}-release.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$ASSET"
+
+          if gh release view "$MODULE_TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release edit "$MODULE_TAG" -R "$REPO" \
+              --title "Modules Manager ${VERSION_NAME}" \
+              --notes-file release-notes.md
+            gh release upload "$MODULE_TAG" "$ASSET" -R "$REPO" --clobber
+          else
+            gh release create "$MODULE_TAG" "$ASSET" -R "$REPO" \
+              --title "Modules Manager ${VERSION_NAME}" \
+              --notes-file release-notes.md
+          fi
