@@ -394,8 +394,8 @@ fun InstalledScreen(
                             scope.launch { listState.scrollToItem(0) }
                             viewModel.rescan(showMessage = true)
                         },
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ) {
                         Icon(
                             Icons.Outlined.Refresh,
