@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,6 +82,7 @@ import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.ModuleUpdate
 import com.rushi.modulesmanager.ReadmeTranslationState
 import com.rushi.modulesmanager.data.ModuleVersion
+import com.rushi.modulesmanager.data.SourceAlternative
 import com.rushi.modulesmanager.data.RepoAsset
 import com.rushi.modulesmanager.data.RepoModule
 import com.rushi.modulesmanager.data.RepoRelease
@@ -125,6 +128,7 @@ fun ModuleDetailScreen(
     }
     val update = updates.firstOrNull { it.installed.packageName == packageName }
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val sourceAlternatives by viewModel.sourceAlternatives.collectAsStateWithLifecycle()
     val release = module?.releaseFor(channel)
     val primaryAsset = release?.preferredAsset()
     val latest = module?.latest(channel)
@@ -325,7 +329,71 @@ fun ModuleDetailScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(10.dp))
+                    val knownSources = remember(module, sourceAlternatives) {
+                        val current = module.githubRepoFullName()
+                        val listed = sourceAlternatives[module.packageName].orEmpty()
+                        (if (current != null) {
+                            listed + SourceAlternative(current, null, null)
+                        } else {
+                            listed
+                        }).distinctBy { it.repo }
+                            .sortedByDescending { it.releaseTime ?: "" }
+                    }
+                    if (knownSources.size > 1) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "Repositories in the index",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 200.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            knownSources.forEach { candidate ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { sourceInput = candidate.repo }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    RadioButton(
+                                        selected = sourceInput == candidate.repo,
+                                        onClick = { sourceInput = candidate.repo },
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = candidate.repo,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        candidate.releaseTime?.let { time ->
+                                            Text(
+                                                text = "Last release ${time.substringBefore('T')}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                    if (candidate.repo == module.githubRepoFullName()) {
+                                        Text(
+                                            text = "Current",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "Or enter another repository",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
                     OutlinedTextField(
                         value = sourceInput,
                         onValueChange = { sourceInput = it },

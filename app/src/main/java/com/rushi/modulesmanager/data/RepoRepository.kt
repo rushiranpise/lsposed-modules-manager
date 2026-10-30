@@ -37,6 +37,11 @@ class RepoRepository(
     private val _updatedAt = MutableStateFlow<Long?>(null)
     val updatedAt: StateFlow<Long?> = _updatedAt.asStateFlow()
 
+    /** All repositories the index lists for a package, including mirrors and forks. */
+    private val _sourceAlternatives = MutableStateFlow<Map<String, List<SourceAlternative>>>(emptyMap())
+    val sourceAlternatives: StateFlow<Map<String, List<SourceAlternative>>> =
+        _sourceAlternatives.asStateFlow()
+
     private val details = ConcurrentHashMap<String, RepoModule>()
     private var activeSourceId: String? = null
     private var packagesWithoutReleases: Set<String> = emptySet()
@@ -49,6 +54,7 @@ class RepoRepository(
         if (switching) {
             activeSourceId = source.id
             details.clear()
+            _sourceAlternatives.value = emptyMap()
             val cached = readCache(source)
             originalModules = cached?.rawModules?.associateBy { it.packageName }.orEmpty()
             _modules.value = cached?.modules.orEmpty()
@@ -66,6 +72,7 @@ class RepoRepository(
             val baseModules = fetched.modules.filterNot { it.hide }
             originalModules = baseModules.associateBy { it.packageName }
             _modules.value = baseModules.map(::applySourceOverride)
+            _sourceAlternatives.value = RepoJson.parseSourceAlternatives(fetched.rawJson)
             if (source.format == RepoFormat.REPOS_JSON) {
                 packagesWithoutReleases = RepoJson.packagesWithoutReleases(fetched.rawJson)
             }
@@ -265,6 +272,7 @@ class RepoRepository(
         if (!file.isFile) return null
         return runCatching {
             val raw = file.readText()
+            _sourceAlternatives.value = RepoJson.parseSourceAlternatives(raw)
             val modules = if (source.format == RepoFormat.REPOS_JSON) {
                 packagesWithoutReleases = RepoJson.packagesWithoutReleases(raw)
                 RepoJson.parseRepos(raw)

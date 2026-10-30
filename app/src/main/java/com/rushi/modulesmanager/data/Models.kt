@@ -74,6 +74,13 @@ data class RepoRelease(
 
 data class RepoCollaborator(val login: String, val name: String?)
 
+/** One repository the daily index lists for a package, used to pick a source. */
+data class SourceAlternative(
+    val repo: String,
+    val releaseTime: String?,
+    val displayName: String?,
+)
+
 data class RepoModule(
     val packageName: String,
     val displayName: String,
@@ -330,6 +337,62 @@ object RepoJson {
             }
         }
         return byPackage.values.toList()
+    }
+
+    /**
+     * Repositories the index lists for each package. The parser keeps only one module per
+     * package, but the raw file can list a mirror and one or more forks; this keeps them so
+     * the source dialog can offer a choice instead of making the user type a slug.
+     */
+    fun parseSourceAlternatives(json: String): Map<String, List<SourceAlternative>> = runCatching {
+        val array = JSONArray(json)
+        val byPackage = LinkedHashMap<String, LinkedHashMap<String, SourceAlternative>>()
+        for (index in 0 until array.length()) {
+            val obj = array.optJSONObject(index) ?: continue
+            if (obj.optBoolean("hide", false)) continue
+            val packageName = packageOf(obj) ?: continue
+            val release = obj.optJSONObject("release")
+            val releaseTime = release
+                ?.optString("published_at")
+                ?.takeIf { it.isNotBlank() && it != "null" }
+            val displayName = obj.optJSONObject("metadata")
+                ?.optString("name")
+                ?.takeIf { it.isNotBlank() && it != "null" }
+            val repos = buildList {
+                githubRepo(obj.optString("full_name"))?.let(::add)
+                githubRepo(obj.optString("source_url"))?.let(::add)
+                githubRepo(obj.optString("html_url"))?.let(::add)
+            }.distinct()
+            val bucket = byPackage.getOrPut(packageName) { LinkedHashMap() }
+            repos.forEach { repo ->
+                val existing = bucket[repo]
+                if (existing == null || isNewerTime(releaseTime, existing.releaseTime)) {
+                    bucket[repo] = SourceAlternative(repo, releaseTime, displayName)
+                }
+            }
+        }
+        byPackage.mapValues { (_, repos) ->
+            repos.values.sortedByDescending { parseInstant(it.releaseTime) ?: Instant.EPOCH }
+        }
+    }.getOrDefault(emptyMap())
+
+    private fun isNewerTime(candidate: String?, existing: String?): Boolean {
+        val newTime = parseInstant(candidate) ?: return false
+        val oldTime = parseInstant(existing) ?: return true
+        return newTime.isAfter(oldTime)
+    }
+
+    private fun githubRepo(value: String?): String? {
+        val raw = value?.trim().orEmpty()
+        if (raw.isEmpty() || raw == "null") return null
+        val match = Regex("github\\.com/([^/]+)/([^/?#]+)", RegexOption.IGNORE_CASE).find(raw)
+            ?: Regex("^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$").find(raw)
+            ?: return null
+        val owner = match.groupValues[1].removeSuffix(".git")
+        val repo = match.groupValues[2].removeSuffix(".git")
+        if (owner.isBlank() || repo.isBlank()) return null
+        if (owner.equals("Xposed-Modules-Repo", ignoreCase = true)) return null
+        return "$owner/$repo"
     }
 
     private fun prettifyName(value: String): String =

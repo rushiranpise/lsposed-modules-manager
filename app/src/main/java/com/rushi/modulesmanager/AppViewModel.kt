@@ -36,6 +36,7 @@ import com.rushi.modulesmanager.data.RepoRelease
 import com.rushi.modulesmanager.data.RootInstaller
 import com.rushi.modulesmanager.data.ShizukuInstaller
 import com.rushi.modulesmanager.data.SortMode
+import com.rushi.modulesmanager.data.SourceAlternative
 import com.rushi.modulesmanager.data.TranslateApi
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
@@ -195,6 +196,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val shizukuBinderDead = Shizuku.OnBinderDeadListener { refreshShizukuStatus() }
 
     val modules: StateFlow<List<RepoModule>> = container.repo.modules
+    val sourceAlternatives: StateFlow<Map<String, List<SourceAlternative>>> =
+        container.repo.sourceAlternatives
     val loading: StateFlow<Boolean> = container.repo.loading
     val refreshing: StateFlow<Boolean> = container.repo.refreshing
     val error: StateFlow<String?> = container.repo.error
