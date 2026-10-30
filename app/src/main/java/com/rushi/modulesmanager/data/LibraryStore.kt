@@ -17,9 +17,6 @@ class LibraryStore(context: Context) {
     private val _recentlyViewed = MutableStateFlow(readList(KEY_RECENT))
     val recentlyViewed: StateFlow<List<String>> = _recentlyViewed.asStateFlow()
 
-    private val _searchHistory = MutableStateFlow(readList(KEY_SEARCHES))
-    val searchHistory: StateFlow<List<String>> = _searchHistory.asStateFlow()
-
     /** Returns true when the package is now a favourite. */
     fun toggleFavourite(packageName: String): Boolean {
         val current = _favourites.value
@@ -36,22 +33,6 @@ class LibraryStore(context: Context) {
         if (updated == _recentlyViewed.value) return
         _recentlyViewed.value = updated
         writeList(KEY_RECENT, updated)
-    }
-
-    fun recordSearch(query: String) {
-        val trimmed = query.trim()
-        if (trimmed.length < 2) return
-        val updated = (listOf(trimmed) + _searchHistory.value.filterNot {
-            it.equals(trimmed, ignoreCase = true)
-        }).take(MAX_SEARCHES)
-        if (updated == _searchHistory.value) return
-        _searchHistory.value = updated
-        writeList(KEY_SEARCHES, updated)
-    }
-
-    fun clearSearchHistory() {
-        _searchHistory.value = emptyList()
-        prefs.edit().remove(KEY_SEARCHES).apply()
     }
 
     private fun readSet(key: String): Set<String> = readList(key).toSet()
@@ -73,8 +54,6 @@ class LibraryStore(context: Context) {
     private companion object {
         const val KEY_FAVOURITES = "favourites"
         const val KEY_RECENT = "recently_viewed"
-        const val KEY_SEARCHES = "search_history"
         const val MAX_RECENT = 20
-        const val MAX_SEARCHES = 10
     }
 }

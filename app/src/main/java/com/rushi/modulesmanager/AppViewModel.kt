@@ -169,7 +169,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val moduleLinks: StateFlow<Map<String, String>> = container.moduleState.links
     val favourites: StateFlow<Set<String>> = container.library.favourites
     val recentlyViewed: StateFlow<List<String>> = container.library.recentlyViewed
-    val searchHistory: StateFlow<List<String>> = container.library.searchHistory
 
     private val libraryState = combine(
         skippedVersions,
@@ -839,13 +838,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         message(if (added) "Added to favourites" else "Removed from favourites")
     }
 
-    fun recordSearch(query: String) {
-        container.library.recordSearch(query)
-    }
-
-    fun clearSearchHistory() {
-        container.library.clearSearchHistory()
-    }
 
     fun toggleIgnoreUpdates(module: RepoModule) {
         val ignored = container.moduleState.toggleIgnored(module.packageName)

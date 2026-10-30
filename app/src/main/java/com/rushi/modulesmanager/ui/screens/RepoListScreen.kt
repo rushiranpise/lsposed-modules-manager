@@ -1,7 +1,6 @@
 package com.rushi.modulesmanager.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.automirrored.outlined.Sort
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,7 +87,6 @@ import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -119,18 +115,10 @@ fun RepoListScreen(
     val dataUpdatedAt by viewModel.dataUpdatedAt.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
-    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
 
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RepoFilter.ALL) }
-
-    LaunchedEffect(query) {
-        if (query.trim().length >= 2) {
-            delay(800)
-            viewModel.recordSearch(query)
-        }
-    }
     var showSortMenu by remember { mutableStateOf(false) }
 
     val installedByPackage = installedVersions
@@ -320,23 +308,6 @@ fun RepoListScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
             )
-
-            if (query.isBlank() && searchHistory.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    searchHistory.take(6).forEach { term ->
-                        AssistChip(
-                            onClick = { query = term },
-                            label = { Text(term) },
-                        )
-                    }
-                }
-            }
 
             Row(
                 modifier = Modifier
