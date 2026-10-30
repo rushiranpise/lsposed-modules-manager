@@ -68,9 +68,16 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "artifacts/ModulesManager-${TAG}-release.apk"
           PREVIOUS=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -1 || true)
           if [ -n "$PREVIOUS" ]; then RANGE="${PREVIOUS}..HEAD"; else RANGE="HEAD"; fi
+          NOTES="release-notes/${TAG#v}.md"
+          if [ -f "$NOTES" ]; then
+            cp "$NOTES" release-notes.md
+          else
+            {
+              echo "## Changes"
+              git log --pretty=format:'- %s (`%h`)' "$RANGE"
+            } > release-notes.md
+          fi
           {
-            echo "## Changes"
-            git log --pretty=format:'- %s (`%h`)' "$RANGE"
             echo
             echo
             echo "## Downloads"
@@ -78,7 +85,7 @@ jobs:
             echo
             echo "- \`ModulesManager-${TAG}-release.apk\`: signed release build"
             echo "- \`ModulesManager-${TAG}-debug.apk\`: debug build"
-          } > release-notes.md
+          } >> release-notes.md
 
       - name: Publish GitHub release
         env:
@@ -121,13 +128,27 @@ jobs:
           ASSET="artifacts/ModulesManager-${MODULE_TAG}-release.apk"
           cp app/build/outputs/apk/release/app-release.apk "$ASSET"
 
+          NOTES="release-notes/${GITHUB_REF_NAME#v}.md"
+          if [ -f "$NOTES" ]; then
+            cp "$NOTES" module-release-notes.md
+          else
+            cp release-notes.md module-release-notes.md
+          fi
+          {
+            echo
+            echo
+            echo "## Download"
+            echo
+            echo "- \`ModulesManager-${MODULE_TAG}-release.apk\`: signed release build"
+          } >> module-release-notes.md
+
           if gh release view "$MODULE_TAG" -R "$REPO" >/dev/null 2>&1; then
             gh release edit "$MODULE_TAG" -R "$REPO" \
               --title "Modules Manager ${VERSION_NAME}" \
-              --notes-file release-notes.md
+              --notes-file module-release-notes.md
             gh release upload "$MODULE_TAG" "$ASSET" -R "$REPO" --clobber
           else
             gh release create "$MODULE_TAG" "$ASSET" -R "$REPO" \
               --title "Modules Manager ${VERSION_NAME}" \
-              --notes-file release-notes.md
+              --notes-file module-release-notes.md
           fi
