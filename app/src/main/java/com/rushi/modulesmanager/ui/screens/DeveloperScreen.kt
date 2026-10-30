@@ -144,6 +144,7 @@ fun DeveloperScreen(
                         favourite = packageName in favourites,
                         onToggleFavourite = { viewModel.toggleFavourite(packageName) },
                         onOpenDeveloper = onOpenDeveloper,
+                        onOpenRelease = viewModel::openLink,
                         onClick = { onOpenModule(packageName) },
                     )
                 }

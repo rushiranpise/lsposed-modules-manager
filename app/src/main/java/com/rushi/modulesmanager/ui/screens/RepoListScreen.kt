@@ -1,5 +1,8 @@
 package com.rushi.modulesmanager.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -70,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -361,6 +365,7 @@ fun RepoListScreen(
                                         viewModel.toggleFavourite(module.packageName)
                                     },
                                     onOpenDeveloper = onOpenDeveloper,
+                                    onOpenRelease = viewModel::openLink,
                                     onClick = { onOpenModule(module.packageName) },
                                 )
                             }
@@ -672,10 +677,12 @@ internal fun ModuleCard(
     favourite: Boolean,
     onToggleFavourite: () -> Unit,
     onOpenDeveloper: (String) -> Unit,
+    onOpenRelease: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     var descriptionExpanded by rememberSaveable(module.packageName) { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
@@ -714,28 +721,54 @@ internal fun ModuleCard(
                         }
                         Spacer(Modifier.width(2.dp))
                     }
-                    val developer = module.developerLogin()
-                    if (developer != null) {
-                        Box {
-                            IconButton(
-                                onClick = { menuOpen = true },
-                                modifier = Modifier.size(32.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.MoreVert,
-                                    contentDescription = "More actions",
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = menuOpen,
-                                onDismissRequest = { menuOpen = false },
-                            ) {
+                    Box {
+                        IconButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.MoreVert,
+                                contentDescription = "More actions",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            module.developerLogin()?.let { developer ->
                                 DropdownMenuItem(
                                     text = { Text("All modules by $developer") },
                                     onClick = {
                                         menuOpen = false
                                         onOpenDeveloper(developer)
+                                    },
+                                )
+                                HorizontalDivider()
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Copy package name") },
+                                onClick = {
+                                    menuOpen = false
+                                    val clipboard = context.getSystemService(
+                                        ClipboardManager::class.java,
+                                    )
+                                    clipboard?.setPrimaryClip(
+                                        ClipData.newPlainText("package name", module.packageName),
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "Package name copied",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                },
+                            )
+                            module.url?.let { url ->
+                                DropdownMenuItem(
+                                    text = { Text("Open release page") },
+                                    onClick = {
+                                        menuOpen = false
+                                        onOpenRelease(url)
                                     },
                                 )
                             }
