@@ -49,6 +49,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rushi.modulesmanager.AppViewModel
+import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.DownloadBanner
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
@@ -196,9 +197,16 @@ fun AppRoot(viewModel: AppViewModel) {
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                if (asset.size > 0) {
+                                val details = buildList {
+                                    addAll(ApkVariants.hints(asset))
+                                    if (asset.size > 0) add(formatBytes(asset.size))
+                                    if (asset.downloadCount > 0) {
+                                        add("${asset.downloadCount} downloads")
+                                    }
+                                }.joinToString(" - ")
+                                if (details.isNotEmpty()) {
                                     Text(
-                                        text = formatBytes(asset.size),
+                                        text = details,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
