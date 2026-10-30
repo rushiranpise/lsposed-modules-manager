@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -23,7 +22,6 @@ import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -46,7 +44,6 @@ import com.rushi.modulesmanager.ui.components.EmptyState
 private enum class LibraryTab(val label: String) {
     FAVOURITES("Favourites"),
     RECENT("Recent"),
-    HIDDEN("Skipped"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,8 +54,6 @@ fun LibraryScreen(
 ) {
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val recentlyViewed by viewModel.recentlyViewed.collectAsStateWithLifecycle()
-    val skipped by viewModel.skippedVersions.collectAsStateWithLifecycle()
-    val ignored by viewModel.ignoredUpdates.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val manualModules by viewModel.manualModules.collectAsStateWithLifecycle()
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
@@ -70,6 +65,8 @@ fun LibraryScreen(
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    // A saved index from the three-tab layout may point past the new end.
+    val selectedTab = LibraryTab.entries[tab.coerceIn(0, LibraryTab.entries.lastIndex)]
 
     val installedByPackage = remember(installed) { installed.associateBy { it.packageName } }
     val installedAsModules = remember(installed) {
@@ -88,14 +85,12 @@ fun LibraryScreen(
             ?: installedByPackage[packageName]?.label
             ?: packageName
 
-    val packages = when (LibraryTab.entries[tab]) {
+    val packages = when (selectedTab) {
         LibraryTab.FAVOURITES -> favourites.sortedBy { label(it).lowercase() }
         LibraryTab.RECENT -> recentlyViewed
-        LibraryTab.HIDDEN -> (skipped.keys + ignored).distinct().sortedBy { label(it).lowercase() }
     }
     val entries = packages.mapNotNull { modulesByPackage[it] }
-    val hiddenCount = (skipped.keys + ignored).distinct().size
-    val tabCounts = listOf(favourites.size, recentlyViewed.size, hiddenCount)
+    val tabCounts = listOf(favourites.size, recentlyViewed.size)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -107,16 +102,16 @@ fun LibraryScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
-                SecondaryTabRow(selectedTabIndex = tab) {
+                SecondaryTabRow(selectedTabIndex = selectedTab.ordinal) {
                     LibraryTab.entries.forEachIndexed { index, item ->
                         Tab(
-                            selected = tab == index,
+                            selected = selectedTab.ordinal == index,
                             onClick = { tab = index },
                             text = {
                                 TabLabel(
                                     text = item.label,
                                     count = tabCounts[index],
-                                    selected = tab == index,
+                                    selected = selectedTab.ordinal == index,
                                 )
                             },
                         )
@@ -133,12 +128,12 @@ fun LibraryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (entries.isEmpty()) {
-                item(key = "empty-${tab}") {
+                item(key = "empty-${selectedTab.ordinal}") {
                     Box(
                         modifier = Modifier.fillParentMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        when (LibraryTab.entries[tab]) {
+                        when (selectedTab) {
                             LibraryTab.FAVOURITES -> EmptyState(
                                 icon = Icons.Outlined.FavoriteBorder,
                                 title = "No favourites yet",
@@ -148,11 +143,6 @@ fun LibraryScreen(
                                 icon = Icons.Outlined.History,
                                 title = "Nothing viewed yet",
                                 body = "Modules you open show up here.",
-                            )
-                            LibraryTab.HIDDEN -> EmptyState(
-                                icon = Icons.Outlined.VisibilityOff,
-                                title = "Nothing is hidden",
-                                body = "Skip a version or ignore updates from an installed module's menu.",
                             )
                         }
                     }
@@ -185,24 +175,6 @@ fun LibraryScreen(
                             onToggleFavourite = { viewModel.toggleFavourite(packageName) },
                             onClick = { onOpenModule(packageName) },
                         )
-                        if (LibraryTab.entries[tab] == LibraryTab.HIDDEN) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (packageName in skipped) {
-                                    TextButton(
-                                        onClick = { viewModel.clearSkippedVersion(module) },
-                                    ) { Text("Clear skipped version") }
-                                }
-                                if (packageName in ignored) {
-                                    TextButton(
-                                        onClick = { viewModel.toggleIgnoreUpdates(module) },
-                                    ) { Text("Restore updates") }
-                                }
-                            }
-                        }
                     }
                 }
             }

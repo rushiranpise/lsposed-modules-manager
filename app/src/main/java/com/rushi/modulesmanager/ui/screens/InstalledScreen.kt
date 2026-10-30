@@ -82,7 +82,7 @@ import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import kotlinx.coroutines.launch
 
-private enum class InstalledFilter { ALL, UPDATES, UP_TO_DATE, NOT_IN_REPO }
+private enum class InstalledFilter { ALL, UPDATES, SKIPPED, UNTRACKED }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -114,6 +114,12 @@ fun InstalledScreen(
             ?: manualModules[module.packageName]
             ?: moduleLinks[module.packageName]?.let { modulesByPackage[it] }
 
+    /** Skipped versions and ignored updates share this filter, keyed by the repository package. */
+    fun hiddenFor(module: InstalledModule): Boolean {
+        val repoPackage = repoModuleFor(module)?.packageName ?: module.packageName
+        return repoPackage in skippedVersions || repoPackage in ignoredUpdates
+    }
+
     // Chip counts follow the search, so they describe the results the user is looking at.
     val searched = remember(installed, query) {
         val needle = query.trim().lowercase()
@@ -126,11 +132,23 @@ fun InstalledScreen(
             }
         }
     }
-    val notInRepoCount = remember(searched, modulesByPackage, moduleLinks) {
+    val untrackedCount = remember(
+        searched,
+        modulesByPackage,
+        manualModules,
+        moduleLinks,
+    ) {
         searched.count { repoModuleFor(it) == null }
     }
-    val upToDateCount = remember(searched, updatesByPackage, modulesByPackage, moduleLinks) {
-        searched.count { repoModuleFor(it) != null && !updatesByPackage.containsKey(it.packageName) }
+    val skippedInSearch = remember(
+        searched,
+        skippedVersions,
+        ignoredUpdates,
+        modulesByPackage,
+        manualModules,
+        moduleLinks,
+    ) {
+        searched.count { hiddenFor(it) }
     }
     val updatesInSearch = remember(searched, updatesByPackage) {
         searched.count { updatesByPackage.containsKey(it.packageName) }
@@ -139,17 +157,18 @@ fun InstalledScreen(
         searched,
         updatesByPackage,
         modulesByPackage,
+        manualModules,
         moduleLinks,
+        skippedVersions,
+        ignoredUpdates,
         filter,
     ) {
         searched.filter { module ->
-            val inRepo = repoModuleFor(module) != null
             when (filter) {
                 InstalledFilter.ALL -> true
                 InstalledFilter.UPDATES -> updatesByPackage.containsKey(module.packageName)
-                InstalledFilter.UP_TO_DATE ->
-                    inRepo && !updatesByPackage.containsKey(module.packageName)
-                InstalledFilter.NOT_IN_REPO -> !inRepo
+                InstalledFilter.SKIPPED -> hiddenFor(module)
+                InstalledFilter.UNTRACKED -> repoModuleFor(module) == null
             }
         }.sortedWith(
             compareBy<InstalledModule> { if (updatesByPackage.containsKey(it.packageName)) 0 else 1 }
@@ -222,16 +241,16 @@ fun InstalledScreen(
                     count = updatesInSearch,
                 )
                 CountedFilterChip(
-                    selected = filter == InstalledFilter.UP_TO_DATE,
-                    onClick = { filter = InstalledFilter.UP_TO_DATE },
-                    label = "Up to date",
-                    count = upToDateCount,
+                    selected = filter == InstalledFilter.SKIPPED,
+                    onClick = { filter = InstalledFilter.SKIPPED },
+                    label = "Skipped",
+                    count = skippedInSearch,
                 )
                 CountedFilterChip(
-                    selected = filter == InstalledFilter.NOT_IN_REPO,
-                    onClick = { filter = InstalledFilter.NOT_IN_REPO },
-                    label = "Not in repo",
-                    count = notInRepoCount,
+                    selected = filter == InstalledFilter.UNTRACKED,
+                    onClick = { filter = InstalledFilter.UNTRACKED },
+                    label = "Untracked",
+                    count = untrackedCount,
                 )
             }
 
@@ -282,23 +301,23 @@ fun InstalledScreen(
                                         "No installed modules found"
                                     } else {
                                         when (filter) {
-                                            InstalledFilter.UPDATES -> "Nothing to update"
-                                            InstalledFilter.UP_TO_DATE -> "Nothing is up to date"
-                                            InstalledFilter.NOT_IN_REPO -> "All modules are in the repository"
-                                            InstalledFilter.ALL -> "No installed modules found"
+                                        InstalledFilter.UPDATES -> "Nothing to update"
+                                        InstalledFilter.SKIPPED -> "Nothing is skipped"
+                                        InstalledFilter.UNTRACKED -> "All modules are tracked"
+                                        InstalledFilter.ALL -> "No installed modules found"
                                         }
                                     },
                                     body = if (installed.isEmpty()) {
                                         "Install modules from the Modules tab, then enable them in LSPosed."
                                     } else {
                                         when (filter) {
-                                            InstalledFilter.UPDATES ->
-                                                "All installed modules are on their latest version."
-                                            InstalledFilter.UP_TO_DATE ->
-                                                "No installed module matches the current search."
-                                            InstalledFilter.NOT_IN_REPO ->
-                                                "Every installed module has an entry in the daily index."
-                                            InstalledFilter.ALL ->
+                                        InstalledFilter.UPDATES ->
+                                            "All installed modules are on their latest version."
+                                        InstalledFilter.SKIPPED ->
+                                            "No installed module has a skipped version or ignored updates."
+                                        InstalledFilter.UNTRACKED ->
+                                            "Every installed module has an entry in the daily index."
+                                        InstalledFilter.ALL ->
                                                 "Install modules from the Modules tab, then enable them in LSPosed."
                                         }
                                     },
