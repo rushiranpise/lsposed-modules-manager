@@ -5,6 +5,7 @@ import android.content.Context
 import com.rushi.modulesmanager.data.AndroidNetworkMonitor
 import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.DownloadRetry
+import com.rushi.modulesmanager.data.DownloadSlots
 import com.rushi.modulesmanager.data.InstalledModuleScanner
 import com.rushi.modulesmanager.data.LiveReleaseApi
 import com.rushi.modulesmanager.data.ModuleStateStore
@@ -20,6 +21,7 @@ class AppContainer(context: Context) {
     val moduleState = ModuleStateStore(appContext)
     val pendingInstalls = PendingInstalls.get(appContext)
     val batchState = BatchStateStore(appContext)
+    val downloadSlots = DownloadSlots { settings.concurrentDownloads.value }
     val api = RepoApi(
         RepoApi.createClient(),
         DownloadRetry(network = AndroidNetworkMonitor(appContext)),

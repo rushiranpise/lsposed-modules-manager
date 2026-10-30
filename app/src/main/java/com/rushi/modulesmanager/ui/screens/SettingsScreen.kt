@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -67,11 +68,13 @@ fun SettingsScreen(viewModel: AppViewModel) {
     val systemColors by viewModel.systemColors.collectAsStateWithLifecycle()
     val autoTranslate by viewModel.autoTranslate.collectAsStateWithLifecycle()
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
+    val concurrentDownloads by viewModel.concurrentDownloads.collectAsStateWithLifecycle()
 
     var showChannelDialog by remember { mutableStateOf(false) }
     var showInstallerDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showDownloadsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(showInstallerDialog) {
         if (showInstallerDialog) viewModel.refreshShizukuStatus()
@@ -158,6 +161,12 @@ fun SettingsScreen(viewModel: AppViewModel) {
                 title = "Update channel",
                 subtitle = channel.label,
                 onClick = { showChannelDialog = true },
+            )
+            SettingsRow(
+                icon = Icons.Outlined.Speed,
+                title = "Concurrent downloads",
+                subtitle = "$concurrentDownloads at a time",
+                onClick = { showDownloadsDialog = true },
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -299,6 +308,50 @@ fun SettingsScreen(viewModel: AppViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = { showLanguageDialog = false }) { Text("Close") }
+            },
+        )
+    }
+
+    if (showDownloadsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDownloadsDialog = false },
+            title = { Text("Concurrent downloads") },
+            text = {
+                Column {
+                    (1..5).forEach { count ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setConcurrentDownloads(count)
+                                    showDownloadsDialog = false
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = concurrentDownloads == count,
+                                onClick = {
+                                    viewModel.setConcurrentDownloads(count)
+                                    showDownloadsDialog = false
+                                },
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("$count at a time", style = MaterialTheme.typography.bodyLarge)
+                                if (count == 3) {
+                                    Text(
+                                        text = "Default",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDownloadsDialog = false }) { Text("Close") }
             },
         )
     }

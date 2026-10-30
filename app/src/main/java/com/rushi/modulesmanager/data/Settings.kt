@@ -33,6 +33,12 @@ class Settings(context: Context) {
     private val _autoTranslate = MutableStateFlow(prefs.getBoolean(KEY_AUTO_TRANSLATE, false))
     val autoTranslate: StateFlow<Boolean> = _autoTranslate.asStateFlow()
 
+    private val _concurrentDownloads = MutableStateFlow(
+        prefs.getInt(KEY_CONCURRENT_DOWNLOADS, DownloadSlots.DEFAULT_LIMIT)
+            .coerceIn(DownloadSlots.MIN_LIMIT, DownloadSlots.MAX_LIMIT),
+    )
+    val concurrentDownloads: StateFlow<Int> = _concurrentDownloads.asStateFlow()
+
     /** Null means the device language. */
     private val _translateLanguage = MutableStateFlow(
         prefs.getString(KEY_TRANSLATE_LANGUAGE, null)?.takeIf { it.isNotBlank() },
@@ -62,6 +68,12 @@ class Settings(context: Context) {
     fun setAutoTranslate(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_TRANSLATE, enabled).apply()
         _autoTranslate.value = enabled
+    }
+
+    fun setConcurrentDownloads(count: Int) {
+        val clamped = count.coerceIn(DownloadSlots.MIN_LIMIT, DownloadSlots.MAX_LIMIT)
+        prefs.edit().putInt(KEY_CONCURRENT_DOWNLOADS, clamped).apply()
+        _concurrentDownloads.value = clamped
     }
 
     fun setTranslateLanguage(language: String?) {
@@ -105,6 +117,7 @@ class Settings(context: Context) {
         const val KEY_SYSTEM_COLORS = "system_colors"
         const val KEY_UPDATES_FIRST = "updates_first"
         const val KEY_AUTO_TRANSLATE = "auto_translate"
+        const val KEY_CONCURRENT_DOWNLOADS = "concurrent_downloads"
         const val KEY_TRANSLATE_LANGUAGE = "translate_language"
         const val KEY_LAST_LIVE_CHECK = "last_live_check"
     }

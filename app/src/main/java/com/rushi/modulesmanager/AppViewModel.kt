@@ -174,6 +174,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     val autoTranslate: StateFlow<Boolean> = settings.autoTranslate
     val translateLanguage: StateFlow<String?> = settings.translateLanguage
+    val concurrentDownloads: StateFlow<Int> = settings.concurrentDownloads
 
     private val _shizukuStatus = MutableStateFlow(ShizukuInstaller.status())
     val shizukuStatus: StateFlow<ShizukuInstaller.Status> = _shizukuStatus.asStateFlow()
@@ -965,8 +966,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         phase = DownloadCenter.Phase.DOWNLOADING,
                     ),
                 )
-                val file = downloadApk(appContext, module, asset, destination) { done, total ->
-                    container.downloads.progress(done, total)
+                val file = container.downloadSlots.withSlot {
+                    downloadApk(appContext, module, asset, destination) { done, total ->
+                        container.downloads.progress(done, total)
+                    }
                 }
                 container.downloads.phase(DownloadCenter.Phase.INSTALLING)
                 markPending(module, asset)
@@ -1275,12 +1278,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             val queue = Channel<PreparedInstall>(Channel.UNLIMITED)
             try {
                 coroutineScope {
-                    val slots = Semaphore(3)
                     val downloads = targets.map { update ->
                         val packageName = update.module.packageName
                         val job = launch {
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.DOWNLOADING) }
-                            slots.withPermit {
+                            container.downloadSlots.withSlot {
                                 try {
                                     val detailed = container.repo.loadModule(
                                         DefaultSources.official,
@@ -1319,7 +1321,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     if (batchPhase(packageName) == BatchPhase.CANCELLED) {
                                         file.delete()
                                         File(file.path + ".part").delete()
-                                        return@withPermit
+                                        return@withSlot
                                     }
                                     updateBatchItem(packageName) {
                                         it.copy(
@@ -1567,6 +1569,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setAutoTranslate(enabled: Boolean) {
         settings.setAutoTranslate(enabled)
+    }
+
+    fun setConcurrentDownloads(count: Int) {
+        settings.setConcurrentDownloads(count)
     }
 
     fun setTranslateLanguage(language: String?) {
