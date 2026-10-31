@@ -39,5 +39,20 @@ object RootInstaller {
         }
     }
 
+    /** Returns null on success, or the shell output describing the failure. */
+    suspend fun uninstall(packageName: String): String? = withContext(Dispatchers.IO) {
+        val result = runCatching {
+            Shell.cmd("pm uninstall --user current ${packageName.shellQuoted()}").exec()
+        }.getOrElse {
+            return@withContext it.message ?: "Could not run the root uninstall"
+        }
+        val output = (result.out + result.err).joinToString("\n").trim()
+        if (result.isSuccess && output.contains("Success", ignoreCase = true)) {
+            null
+        } else {
+            output.ifBlank { "Root uninstall failed" }
+        }
+    }
+
     private fun String.shellQuoted(): String = "'" + replace("'", "'\\''") + "'"
 }

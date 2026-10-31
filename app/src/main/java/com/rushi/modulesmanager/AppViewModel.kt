@@ -1788,8 +1788,49 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             .onFailure { message("Could not open app info") }
     }
 
-    /** Opens the system uninstaller for an installed module. */
+    /** Uninstalls through the selected installer, or opens the system uninstaller for it. */
     fun uninstall(packageName: String) {
+        viewModelScope.launch {
+            when (settings.installer.value) {
+                InstallerType.SYSTEM, InstallerType.SESSION -> openSystemUninstaller(packageName)
+                InstallerType.SHIZUKU -> {
+                    if (ShizukuInstaller.ensurePermission()) {
+                        finishUninstall(packageName, ShizukuInstaller.uninstall(packageName))
+                    } else {
+                        refreshShizukuStatus()
+                        val reason = if (!ShizukuInstaller.isRunning()) {
+                            "Shizuku is not running"
+                        } else {
+                            "Shizuku permission was not granted"
+                        }
+                        message("$reason, opening the system uninstaller")
+                        openSystemUninstaller(packageName)
+                    }
+                }
+                InstallerType.ROOT -> {
+                    if (RootInstaller.isAvailable()) {
+                        finishUninstall(packageName, RootInstaller.uninstall(packageName))
+                    } else {
+                        message("Root access is not granted, opening the system uninstaller")
+                        openSystemUninstaller(packageName)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun finishUninstall(packageName: String, problem: String?) {
+        if (problem == null) {
+            val label = detectedModules.firstOrNull { it.packageName == packageName }?.label
+                ?: packageName
+            message("Uninstalled $label")
+            rescan()
+        } else {
+            message(problem)
+        }
+    }
+
+    private fun openSystemUninstaller(packageName: String) {
         val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { container.appContext.startActivity(intent) }

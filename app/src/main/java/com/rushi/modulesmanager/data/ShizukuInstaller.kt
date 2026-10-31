@@ -132,6 +132,42 @@ object ShizukuInstaller {
         }
     }
 
+    /** Runs `pm uninstall` as the shell user. Returns null on success, or the output describing the failure. */
+    suspend fun uninstall(packageName: String): String? = withContext(Dispatchers.IO) {
+        val process = try {
+            val binder = Shizuku.getBinder() ?: return@withContext "Shizuku is not running"
+            RemoteProcess(
+                IShizukuService.Stub.asInterface(binder).newProcess(
+                    arrayOf("pm", "uninstall", "--user", "current", packageName),
+                    null,
+                    null,
+                ),
+            )
+        } catch (t: Throwable) {
+            return@withContext t.message ?: "Could not start the Shizuku uninstall"
+        }
+
+        try {
+            val stdout = process.inputStream.bufferedReader().readText()
+            val stderr = process.errorStream.bufferedReader().readText()
+            if (!process.waitFor(INSTALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroy()
+                return@withContext "The Shizuku uninstall timed out"
+            }
+            val output = (stdout + "\n" + stderr).trim()
+            val exitCode = process.exitValue()
+            if (exitCode == 0 && output.contains("Success", ignoreCase = true)) {
+                null
+            } else {
+                output.ifBlank { "Shizuku uninstall failed (exit $exitCode)" }
+            }
+        } catch (t: Throwable) {
+            t.message ?: "Shizuku uninstall failed"
+        } finally {
+            if (process.isAlive) process.destroy()
+        }
+    }
+
     private class RemoteProcess(private val remote: IRemoteProcess) : Process() {
         private val input by lazy { ParcelFileDescriptor.AutoCloseInputStream(remote.inputStream) }
         private val output by lazy { ParcelFileDescriptor.AutoCloseOutputStream(remote.outputStream) }
