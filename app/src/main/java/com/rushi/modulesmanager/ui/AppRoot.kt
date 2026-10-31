@@ -1,5 +1,6 @@
 package com.rushi.modulesmanager.ui
 
+import android.content.res.Configuration
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -55,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -118,8 +120,10 @@ fun AppRoot(viewModel: AppViewModel) {
     }
 
     BoxWithConstraints {
-        // A rail on tablets and other wide windows; phones float a pill over the content.
-        val wide = maxWidth >= 600.dp
+        // A rail only on tablet landscape; portrait tablets keep the phone pill, as upstream does.
+        val landscape =
+            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val wide = maxWidth >= 600.dp && landscape
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -145,7 +149,9 @@ fun AppRoot(viewModel: AppViewModel) {
                         )
                     }
                     Row(modifier = Modifier.weight(1f)) {
-                        if (showBottomBar) {
+                        // Keep the rail beside module and developer pages; only diagnostics
+                        // takes the full window.
+                        if (currentRoute != "diagnostics") {
                             NavigationRail {
                                 Destination.entries.forEach { destination ->
                                     NavigationRailItem(
