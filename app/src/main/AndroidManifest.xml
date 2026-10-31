@@ -14,6 +14,10 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <!-- Chinese ROMs gate getInstalledPackages() behind this extra runtime
+         permission on top of QUERY_ALL_PACKAGES. It does not exist elsewhere,
+         so the check treats an unknown permission as granted. -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
 
     <queries>
         <package android:name="moe.shizuku.manager" />

@@ -96,6 +96,14 @@ class Settings(context: Context) {
         _systemColors.value = enabled
     }
 
+    /** Chinese ROMs only: whether the app list permission has already been requested once. */
+    fun installedAppsPermissionAsked(): Boolean =
+        prefs.getBoolean(KEY_INSTALLED_APPS_ASKED, false)
+
+    fun markInstalledAppsPermissionAsked() {
+        prefs.edit().putBoolean(KEY_INSTALLED_APPS_ASKED, true).apply()
+    }
+
     fun lastLiveCheck(): Long = prefs.getLong(KEY_LAST_LIVE_CHECK, 0L)
 
     fun setLastLiveCheck(time: Long) {
@@ -120,5 +128,6 @@ class Settings(context: Context) {
         const val KEY_CONCURRENT_DOWNLOADS = "concurrent_downloads"
         const val KEY_TRANSLATE_LANGUAGE = "translate_language"
         const val KEY_LAST_LIVE_CHECK = "last_live_check"
+        const val KEY_INSTALLED_APPS_ASKED = "installed_apps_asked"
     }
 }
