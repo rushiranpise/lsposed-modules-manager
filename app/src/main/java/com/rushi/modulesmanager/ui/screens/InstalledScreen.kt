@@ -247,14 +247,7 @@ fun InstalledScreen(
                 )
             }
 
-            val visibleBatch = batch
-            if (visibleBatch != null && (visibleBatch.running || visibleBatch.interrupted)) {
-                BatchProgressCard(
-                    state = visibleBatch,
-                    onCancel = viewModel::cancelBatch,
-                    onDismiss = viewModel::dismissBatch,
-                )
-            } else if (updates.isNotEmpty()) {
+            if (updates.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = viewModel::updateAll,
                     modifier = Modifier
@@ -442,6 +435,15 @@ fun InstalledScreen(
                 viewModel.linkModule(module.packageName, url)
                 linkingModule = null
             },
+        )
+    }
+
+    val visibleBatch = batch
+    if (visibleBatch != null && (visibleBatch.running || visibleBatch.interrupted)) {
+        BatchProgressDialog(
+            state = visibleBatch,
+            onCancel = viewModel::cancelBatch,
+            onDismiss = viewModel::dismissBatch,
         )
     }
 }
@@ -806,7 +808,7 @@ private fun BatchItemProgress(item: BatchItemState, onCancel: () -> Unit) {
 }
 
 @Composable
-private fun BatchProgressCard(
+private fun BatchProgressDialog(
     state: BatchUpdateState,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
@@ -814,56 +816,48 @@ private fun BatchProgressCard(
     val fraction = if (state.total > 0) state.finished.toFloat() / state.total else 0f
     val failedItems = state.items.values.filter { it.phase == BatchPhase.FAILED }
     val firstFailure = failedItems.firstOrNull()
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
-        border = amoledCardBorder(),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (state.running) {
-                            state.current?.let { "Installing $it" } ?: "Preparing updates"
-                        } else {
-                            "Updates interrupted"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = buildString {
-                            append("${state.finished} of ${state.total} done")
-                            if (failedItems.isNotEmpty()) append(" - ${failedItems.size} failed")
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!state.running && firstFailure != null) {
-                        Text(
-                            text = "${firstFailure.title}: ${firstFailure.error.orEmpty()}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (state.running) {
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                } else {
-                    TextButton(onClick = onDismiss) { Text("Dismiss") }
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.fillMaxWidth(),
+    AlertDialog(
+        onDismissRequest = { if (!state.running) onDismiss() },
+        title = {
+            Text(
+                when {
+                    !state.running -> "Updates interrupted"
+                    state.current != null -> "Installing ${state.current}"
+                    else -> "Preparing updates"
+                },
             )
-        }
-    }
+        },
+        text = {
+            Column {
+                Text(
+                    text = buildString {
+                        append("${state.finished} of ${state.total} done")
+                        if (failedItems.isNotEmpty()) append(" - ${failedItems.size} failed")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!state.running && firstFailure != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "${firstFailure.title}: ${firstFailure.error.orEmpty()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            if (state.running) {
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Dismiss") }
+            }
+        },
+    )
 }
