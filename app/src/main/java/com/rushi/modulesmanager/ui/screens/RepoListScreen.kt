@@ -192,7 +192,16 @@ fun RepoListScreen(
         lastDataStamp = stamp
     }
 
-    val filtered = remember(searched, filter, installedByPackage, updatesByPackage, sortMode, updatesFirst, channel) {
+    val filtered = remember(
+        searched,
+        filter,
+        installedByPackage,
+        updatesByPackage,
+        sortMode,
+        updatesFirst,
+        channel,
+        sourceAlternatives,
+    ) {
         val matched = when (filter) {
             RepoFilter.ALL -> searched
             RepoFilter.UPDATES -> searched.filter { updatesByPackage.containsKey(it.packageName) }
@@ -210,6 +219,9 @@ fun RepoListScreen(
                     }.thenBy { it.displayName.lowercase() }
                     SortMode.STARS -> compareByDescending<RepoModule> { it.stargazerCount }
                         .thenBy { it.displayName.lowercase() }
+                    SortMode.SOURCES -> compareByDescending<RepoModule> {
+                        sourceAlternatives[it.packageName]?.size ?: 1
+                    }.thenBy { it.displayName.lowercase() }
                     SortMode.UPDATED -> compareByDescending<RepoModule> {
                         parseInstant(it.latestTime(channel)) ?: Instant.EPOCH
                     }
@@ -480,6 +492,16 @@ fun RepoListScreen(
                                 },
                                 onClick = {
                                     viewModel.setSortMode(SortMode.STARS)
+                                    showSortMenu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sort by sources") },
+                                leadingIcon = {
+                                    if (sortMode == SortMode.SOURCES) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                                },
+                                onClick = {
+                                    viewModel.setSortMode(SortMode.SOURCES)
                                     showSortMenu = false
                                 },
                             )
