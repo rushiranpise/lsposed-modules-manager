@@ -73,7 +73,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -165,7 +164,6 @@ fun RepoListScreen(
     }
     val notInstalledInRepo = searched.size - installedInRepo
     val listState = rememberLazyListState()
-    val columns = if (LocalConfiguration.current.screenWidthDp >= 600) 2 else 1
     val scope = rememberCoroutineScope()
 
     // Skip the first run so returning from a module page keeps the scroll position.
@@ -366,51 +364,35 @@ fun RepoListScreen(
                                     )
                                 }
                             }
-                            items(
-                                filtered.chunked(columns),
-                                key = { row -> row.first().packageName },
-                            ) { row ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    row.forEach { module ->
-                                        ModuleCard(
-                                            module = module,
-                                            latest = module.latest(channel),
-                                            installed = installedByPackage[module.packageName],
-                                            update = updatesByPackage[module.packageName],
-                                            channel = channel,
-                                            translation = translations[module.packageName] ?: remember(
-                                                module.packageName,
-                                                module.summary,
-                                                translateLanguage,
-                                            ) {
-                                                viewModel.cachedTranslation(module)
-                                                    ?.let { TranslationState(text = it) }
-                                            },
-                                            showTranslate = !TranslationLanguages.matches(
-                                                descriptionLanguages[module.packageName],
-                                                translateLanguage,
-                                            ),
-                                            onTranslate = { viewModel.translate(module) },
-                                            onShowOriginal = { viewModel.showOriginal(module) },
-                                            sourceCount = sourceAlternatives[module.packageName]?.size
-                                                ?: 1,
-                                            favourite = module.packageName in favourites,
-                                            onToggleFavourite = {
-                                                viewModel.toggleFavourite(module.packageName)
-                                            },
-                                            onOpenDeveloper = onOpenDeveloper,
-                                            onOpenRelease = viewModel::openLink,
-                                            onClick = { onOpenModule(module.packageName) },
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                    repeat(columns - row.size) {
-                                        Spacer(Modifier.weight(1f))
-                                    }
-                                }
+                            items(filtered, key = { it.packageName }) { module ->
+                                ModuleCard(
+                                    module = module,
+                                    latest = module.latest(channel),
+                                    installed = installedByPackage[module.packageName],
+                                    update = updatesByPackage[module.packageName],
+                                    channel = channel,
+                                    translation = translations[module.packageName] ?: remember(
+                                        module.packageName,
+                                        module.summary,
+                                        translateLanguage,
+                                    ) {
+                                        viewModel.cachedTranslation(module)?.let { TranslationState(text = it) }
+                                    },
+                                    showTranslate = !TranslationLanguages.matches(
+                                        descriptionLanguages[module.packageName],
+                                        translateLanguage,
+                                    ),
+                                    onTranslate = { viewModel.translate(module) },
+                                    onShowOriginal = { viewModel.showOriginal(module) },
+                                    sourceCount = sourceAlternatives[module.packageName]?.size ?: 1,
+                                    favourite = module.packageName in favourites,
+                                    onToggleFavourite = {
+                                        viewModel.toggleFavourite(module.packageName)
+                                    },
+                                    onOpenDeveloper = onOpenDeveloper,
+                                    onOpenRelease = viewModel::openLink,
+                                    onClick = { onOpenModule(module.packageName) },
+                                )
                             }
                         }
                     }
@@ -577,9 +559,11 @@ private fun ModuleShelf(
                         .width(158.dp)
                         .clickable { onOpen(module.packageName) },
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ModuleAvatar(module, size = 34.dp)
+                            ModuleAvatar(module, size = 30.dp)
                             Spacer(Modifier.weight(1f))
                             val favourite = module.packageName in favourites
                             IconButton(
@@ -606,14 +590,14 @@ private fun ModuleShelf(
                                 )
                             }
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = module.displayName,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(1.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (showStars) {
                                 val gold = starAccentColor()
@@ -734,7 +718,6 @@ internal fun ModuleCard(
     onOpenDeveloper: (String) -> Unit,
     onOpenRelease: (String) -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     var descriptionExpanded by rememberSaveable(module.packageName) { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -744,7 +727,7 @@ internal fun ModuleCard(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = amoledCardContainerColor()),
         border = amoledCardBorder(),
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(14.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
