@@ -1,6 +1,5 @@
 package com.rushi.modulesmanager.ui
 
-import android.content.res.Configuration
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -64,7 +63,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -128,10 +126,10 @@ fun AppRoot(viewModel: AppViewModel) {
     }
 
     BoxWithConstraints {
-        // A rail only on tablet landscape; portrait tablets keep the phone pill, as upstream does.
-        val landscape =
-            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val wide = maxWidth >= 600.dp && landscape
+        // A rail only when the window is wide and landscape; portrait tablets keep the phone
+        // pill. The window shape is more reliable than Configuration.orientation on large
+        // screens, where it can be undefined.
+        val wide = maxWidth >= 600.dp && maxWidth > maxHeight
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
