@@ -295,7 +295,7 @@ fun ModuleDetailScreen(
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 8.dp),
             ) {
                 tabs.forEachIndexed { index, title ->
                     SegmentedButton(
@@ -518,7 +518,7 @@ private fun DetailHeader(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         val primaryLabel = when {
             hasUpdate -> "Update"
             isInstalled && installedHasLauncher -> "Open"
@@ -558,7 +558,7 @@ private fun DetailHeader(
         }
 
         if (isInstalled) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             OutlinedButton(
                 onClick = onUninstall,
                 shape = RoundedCornerShape(28.dp),
