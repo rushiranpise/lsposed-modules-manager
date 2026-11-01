@@ -884,6 +884,10 @@ private fun ReleaseCard(
                         Text(if (expanded) "Show less" else "Read more")
                     }
                 }
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
             }
             if (release.apkAssets.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
