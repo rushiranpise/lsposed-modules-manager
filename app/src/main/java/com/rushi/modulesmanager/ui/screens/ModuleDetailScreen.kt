@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -76,6 +79,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -450,6 +454,7 @@ fun ModuleDetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailHeader(
     module: RepoModule,
@@ -468,6 +473,7 @@ private fun DetailHeader(
     val hasUpdate = updateVersion != null
     val isInstalled = installedVersion != null
     val latestDate = formatDate(module.latestTime(channel))
+    val latestVersion = module.releaseFor(channel)?.let { it.name ?: it.tagName }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -487,31 +493,47 @@ private fun DetailHeader(
                 Spacer(Modifier.height(4.dp))
                 PackageLabel(module.packageName)
                 Spacer(Modifier.height(6.dp))
-                Row(
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     StarBadge(module.stargazerCount)
                     if (latestDate != null) StatusPill(text = latestDate)
-                }
-                module.developerLogin()?.let { developer ->
-                    Text(
-                        text = "by $developer",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .clickable { onOpenDeveloper(developer) },
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
                         hasUpdate -> VersionPill(
                             text = "v${installedVersion.orEmpty()} \u2192 v${shortVersion(updateVersion.name)}",
                         )
                         isInstalled -> VersionPill(
                             text = "Installed v${shortVersion(installedVersion)}",
+                        )
+                        latestVersion != null -> VersionPill(
+                            text = "v${shortVersion(latestVersion)}",
+                        )
+                    }
+                }
+                module.developerLogin()?.let { developer ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .clickable { onOpenDeveloper(developer) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "by $developer",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
