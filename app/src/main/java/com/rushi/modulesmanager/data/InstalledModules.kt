@@ -8,7 +8,6 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import java.util.zip.ZipFile
 
 data class InstalledModule(
     val packageName: String,
@@ -119,18 +118,9 @@ class InstalledModuleScanner(private val context: Context) {
         }
         val versionCode = versionCodeOf(info)
         val key = "${info.packageName}:$versionCode:${info.lastUpdateTime}"
-        return libxposedCache.getOrPut(key) { hasLibxposedMetadata(app.sourceDir) }
-    }
-
-    private fun hasLibxposedMetadata(sourceDir: String?): Boolean {
-        if (sourceDir.isNullOrBlank()) return false
-        return runCatching {
-            ZipFile(sourceDir).use { zip ->
-                zip.getEntry("META-INF/xposed/module.prop") != null ||
-                    zip.getEntry("META-INF/xposed/java_init.list") != null ||
-                    zip.getEntry("assets/xposed_init") != null
-            }
-        }.getOrDefault(false)
+        return libxposedCache.getOrPut(key) {
+            ModuleMarker.isModernModule(app.sourceDir, app.splitSourceDirs)
+        }
     }
 
     /** Current version of one package, used to confirm an install without a full rescan. */
