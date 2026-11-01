@@ -556,73 +556,75 @@ private fun ModuleShelf(
                     ),
                     border = amoledCardBorder(),
                     modifier = Modifier
-                        .width(158.dp)
+                        .width(170.dp)
                         .clickable { onOpen(module.packageName) },
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ModuleAvatar(module, size = 30.dp)
-                            Spacer(Modifier.weight(1f))
-                            val favourite = module.packageName in favourites
-                            IconButton(
-                                onClick = { onToggleFavourite(module.packageName) },
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(
-                                    imageVector = if (favourite) {
-                                        Icons.Filled.Favorite
-                                    } else {
-                                        Icons.Outlined.FavoriteBorder
-                                    },
-                                    contentDescription = if (favourite) {
-                                        "Remove from favourites"
-                                    } else {
-                                        "Add to favourites"
-                                    },
-                                    tint = if (favourite) {
-                                        favouriteColor()
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(16.dp),
-                                )
+                        ModuleAvatar(module, size = 32.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = module.displayName,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (showStars) {
+                                    val gold = starAccentColor()
+                                    Icon(
+                                        imageVector = Icons.Outlined.Star,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = gold,
+                                    )
+                                    Spacer(Modifier.width(3.dp))
+                                    Text(
+                                        text = module.stargazerCount.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = gold,
+                                    )
+                                } else {
+                                    val time = parseInstant(module.latestTime(channel))
+                                    Text(
+                                        text = time?.toEpochMilli()?.let(::formatRelativeTime)
+                                            ?: "No release",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = module.displayName,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(1.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (showStars) {
-                                val gold = starAccentColor()
-                                Icon(
-                                    imageVector = Icons.Outlined.Star,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = gold,
-                                )
-                                Spacer(Modifier.width(3.dp))
-                                Text(
-                                    text = module.stargazerCount.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = gold,
-                                )
-                            } else {
-                                val time = parseInstant(module.latestTime(channel))
-                                Text(
-                                    text = time?.toEpochMilli()?.let(::formatRelativeTime)
-                                        ?: "No release",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                )
-                            }
+                        val favourite = module.packageName in favourites
+                        IconButton(
+                            onClick = { onToggleFavourite(module.packageName) },
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (favourite) {
+                                    Icons.Filled.Favorite
+                                } else {
+                                    Icons.Outlined.FavoriteBorder
+                                },
+                                contentDescription = if (favourite) {
+                                    "Remove from favourites"
+                                } else {
+                                    "Add to favourites"
+                                },
+                                tint = if (favourite) {
+                                    favouriteColor()
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(14.dp),
+                            )
                         }
                     }
                 }
