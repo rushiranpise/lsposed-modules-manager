@@ -10,18 +10,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +31,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -41,7 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -134,28 +138,7 @@ fun AppRoot(viewModel: AppViewModel) {
                         hostState = snackbarHostState,
                         modifier = Modifier.padding(bottom = if (wide) 0.dp else 96.dp),
                     ) { data ->
-                        val amoled = LocalAmoled.current
-                        val shape = RoundedCornerShape(12.dp)
-                        Snackbar(
-                            snackbarData = data,
-                            containerColor = if (amoled) {
-                                Color.Black
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            },
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            actionColor = MaterialTheme.colorScheme.primary,
-                            shape = shape,
-                            modifier = if (amoled) {
-                                Modifier.border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                    shape,
-                                )
-                            } else {
-                                Modifier
-                            },
-                        )
+                        MessageBanner(data)
                     }
                 },
             ) { padding ->
@@ -508,6 +491,69 @@ private fun AppNavHost(
             )
         }
     }
+}
+
+@Composable
+private fun MessageBanner(data: SnackbarData) {
+    val amoled = LocalAmoled.current
+    val message = data.visuals.message
+    val error = isErrorMessage(message)
+    Surface(
+        color = if (amoled) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = if (amoled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 3.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = when {
+                    error -> Icons.Outlined.ErrorOutline
+                    looksLikeSuccess(message) -> Icons.Outlined.CheckCircle
+                    else -> Icons.Outlined.Info
+                },
+                contentDescription = null,
+                tint = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            data.visuals.actionLabel?.let { label ->
+                TextButton(onClick = { data.performAction() }) { Text(label) }
+            }
+        }
+    }
+}
+
+private fun looksLikeSuccess(message: String): Boolean {
+    val lower = message.lowercase()
+    return lower.contains("installed") ||
+        lower.contains("uninstalled") ||
+        lower.contains("rescanned") ||
+        lower.contains("updated")
+}
+
+private fun isErrorMessage(message: String): Boolean {
+    val lower = message.lowercase()
+    return lower.contains("could not") ||
+        lower.contains("failed") ||
+        lower.contains("timed out") ||
+        lower.contains("not running") ||
+        lower.contains("not granted") ||
+        lower.contains("not available") ||
+        lower.contains("not installed") ||
+        lower.contains("conflicts") ||
+        lower.contains("allow ")
 }
 
 private fun NavHostController.navigateTopLevel(route: String) {
