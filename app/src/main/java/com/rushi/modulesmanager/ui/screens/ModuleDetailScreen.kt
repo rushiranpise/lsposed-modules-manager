@@ -64,6 +64,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -79,8 +80,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -101,6 +102,7 @@ import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.data.formatDate
 import com.rushi.modulesmanager.data.stripHtml
 import com.rushi.modulesmanager.ui.components.EmptyState
+import com.rushi.modulesmanager.ui.components.ForkBadge
 import com.rushi.modulesmanager.ui.components.LoadingState
 import com.rushi.modulesmanager.ui.components.MarkdownBlocks
 import com.rushi.modulesmanager.ui.components.ModuleAvatar
@@ -110,12 +112,11 @@ import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
 import com.rushi.modulesmanager.ui.components.favouriteColor
 import com.rushi.modulesmanager.ui.components.markdownPlainText
-import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.shortVersion
 import com.rushi.modulesmanager.ui.theme.amoledCardBorder
 import com.rushi.modulesmanager.ui.theme.amoledCardContainerColor
 
-private val tabs = listOf("Overview", "Releases", "Information")
+private val tabs = listOf("Overview", "Releases")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,6 +156,9 @@ fun ModuleDetailScreen(
     val primaryAsset = release?.preferredAsset(packageName)
 
     LaunchedEffect(packageName) { viewModel.openModule(packageName) }
+    LaunchedEffect(Unit) {
+        if (tab !in tabs.indices) tab = 0
+    }
     LaunchedEffect(tab, module?.packageName, autoTranslate, translateLanguage) {
         if (tab == 1 && autoTranslate) viewModel.translateReleases(announce = false)
     }
@@ -366,7 +370,7 @@ fun ModuleDetailScreen(
                         showOriginal = showOriginalReadme,
                         onOpenLink = viewModel::openLink,
                     )
-                    1 -> ReleasesTab(
+                    else -> ReleasesTab(
                         module = module,
                         loading = loading,
                         translations = if (showOriginalReleases) {
@@ -378,10 +382,6 @@ fun ModuleDetailScreen(
                             viewModel.installChosen(module, asset)
                         },
                         onOpenRelease = viewModel::openLink,
-                    )
-                    else -> InformationTab(
-                        module = module,
-                        onOpenLink = viewModel::openLink,
                     )
                 }
             }
@@ -538,7 +538,8 @@ private fun DetailHeader(
                     itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     StarBadge(module.stargazerCount)
-                    if (latestDate != null) StatusPill(text = latestDate)
+                    ForkBadge(module.forkCount)
+                    if (latestDate != null) DatePill(text = latestDate)
                     when {
                         hasUpdate -> VersionPill(
                             text = "v${installedVersion.orEmpty()} \u2192 v${shortVersion(updateVersion.name)}",
@@ -553,28 +554,7 @@ private fun DetailHeader(
                 }
                 module.developerLogin()?.let { developer ->
                     Spacer(Modifier.height(8.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(percent = 50))
-                            .clickable { onOpenDeveloper(developer) }
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "by $developer",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    AuthorPill(developer, onClick = { onOpenDeveloper(developer) })
                 }
             }
         }
@@ -641,6 +621,57 @@ private fun DetailHeader(
                 Text("Uninstall")
             }
         }
+    }
+}
+
+@Composable
+private fun AuthorPill(developer: String, onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        color = Color.Transparent,
+        contentColor = accent,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Person,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = developer,
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DatePill(text: String) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val accent = if (dark) Color(0xFFFFA657) else Color(0xFFB45309)
+    Surface(
+        color = Color.Transparent,
+        contentColor = accent,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.55f)),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
     }
 }
 
@@ -946,86 +977,6 @@ private fun AssetRow(asset: RepoAsset, onInstall: () -> Unit) {
             Spacer(Modifier.width(6.dp))
             Text("Install")
         }
-    }
-}
-
-@Composable
-private fun InformationTab(
-    module: RepoModule,
-    onOpenLink: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        module.url?.let { InfoRow("Releases", it, onClick = { onOpenLink(it) }) }
-        if (module.collaborators.isNotEmpty()) {
-            InfoRow(
-                title = "Maintainers",
-                value = module.collaborators.joinToString(", ") { it.name ?: it.login },
-            )
-        }
-        InfoRow(
-            title = "Stars",
-            value = module.stargazerCount.toString(),
-            valueColor = starAccentColor(),
-        )
-        InfoRow("Forks", module.forkCount.toString())
-        if (module.scope.isNotEmpty()) {
-            InfoRow(
-                title = "Target apps",
-                value = module.scope.joinToString("\n"),
-            )
-        }
-        HorizontalDivider()
-        Text(
-            text = "Version strings in this repository look like versionCode-versionName. Updates are matched by package name and version code.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun InfoRow(
-    title: String,
-    value: String,
-    onClick: (() -> Unit)? = null,
-    valueColor: Color? = null,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            if (onClick != null) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = valueColor ?: if (onClick != null) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        )
     }
 }
 
