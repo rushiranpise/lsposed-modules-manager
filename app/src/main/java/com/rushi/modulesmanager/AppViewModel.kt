@@ -41,6 +41,7 @@ import com.rushi.modulesmanager.data.TranslateApi
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
 import com.rushi.modulesmanager.data.preferredAsset
+import com.rushi.modulesmanager.data.stripHtml
 import com.rushi.modulesmanager.data.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -152,6 +153,16 @@ data class ReadmeTranslationState(
     val language: String? = null,
 )
 
+data class ReleaseTranslationState(
+    val loading: Boolean = false,
+    val progress: Float = 0f,
+    val language: String? = null,
+    /** Original prose to translated prose, preserving the Markdown around it. */
+    val texts: Map<String, String> = emptyMap(),
+) {
+    val translated: Boolean get() = texts.isNotEmpty()
+}
+
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val settings = container.settings
@@ -238,6 +249,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _readmeTranslation = MutableStateFlow<ReadmeTranslationState?>(null)
     val readmeTranslation: StateFlow<ReadmeTranslationState?> = _readmeTranslation.asStateFlow()
 
+    private val _releaseTranslation = MutableStateFlow<ReleaseTranslationState?>(null)
+    val releaseTranslation: StateFlow<ReleaseTranslationState?> = _releaseTranslation.asStateFlow()
+
     private val _batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
     val batchUpdate: StateFlow<BatchUpdateState?> = _batchUpdate.asStateFlow()
 
@@ -251,6 +265,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private var detailJob: Job? = null
     private var readmeTranslationJob: Job? = null
+    private var releaseTranslationJob: Job? = null
     private var downloadJob: Job? = null
     private var activeInstall: InstallSession? = null
     private var batchJob: Job? = null
@@ -667,7 +682,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.library.recordViewed(packageName)
         detailJob?.cancel()
         readmeTranslationJob?.cancel()
+        releaseTranslationJob?.cancel()
         _readmeTranslation.value = null
+        _releaseTranslation.value = null
         _detail.value = _manualModules.value[packageName]
             ?: container.repo.cachedModule(packageName)
         _detailError.value = null
@@ -742,7 +759,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun closeModule() {
         detailJob?.cancel()
         readmeTranslationJob?.cancel()
+        releaseTranslationJob?.cancel()
         _readmeTranslation.value = null
+        _releaseTranslation.value = null
         _detail.value = null
         _detailError.value = null
         _detailLoading.value = false
@@ -793,6 +812,68 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             } catch (e: Exception) {
                 _readmeTranslation.value = null
                 if (announce) message(e.message ?: "Could not translate this README")
+            }
+        }
+    }
+
+    /**
+     * Translates release-note prose with the same language rules as descriptions and READMEs.
+     * Only text nodes are sent, so Markdown structure and code blocks stay intact.
+     */
+    fun translateReleases(announce: Boolean = true) {
+        val module = _detail.value ?: return
+        if (releaseTranslationJob?.isActive == true) return
+        val target = targetLanguage()
+        val current = _releaseTranslation.value
+        if (current?.translated == true && current.language == target) return
+
+        _releaseTranslation.value = ReleaseTranslationState(loading = true, language = target)
+        releaseTranslationJob = viewModelScope.launch {
+            try {
+                val inputs = LinkedHashSet<String>()
+                for (release in module.allReleases()) {
+                    val raw = release.descriptionHtml ?: continue
+                    if (ReadmeTranslator.looksLikeHtml(raw)) {
+                        stripHtml(raw)?.takeIf { it.isNotBlank() }?.let(inputs::add)
+                    } else {
+                        ReadmeTranslator.proseTexts(raw).filterTo(inputs) { it.isNotBlank() }
+                        ReadmeTranslator.plainText(raw).takeIf { it.isNotBlank() }?.let(inputs::add)
+                    }
+                }
+                if (inputs.isEmpty()) {
+                    _releaseTranslation.value = null
+                    if (announce) message("These release notes have no text that can be translated")
+                    return@launch
+                }
+
+                val sources = inputs.toList()
+                val results = TranslateApi.translateAll(sources, target) { progress ->
+                    _releaseTranslation.update { it?.copy(progress = progress) }
+                }
+                val translated = buildMap {
+                    sources.forEachIndexed { index, original ->
+                        val result = results[index]
+                        if (result.sourceLanguage == target) return@forEachIndexed
+                        if (original.none { it.isLetter() }) return@forEachIndexed
+                        val text = result.text.trim()
+                        if (text.isNotEmpty() && !text.equals(original, ignoreCase = true)) {
+                            put(original, text)
+                        }
+                    }
+                }
+                if (_detail.value?.packageName != module.packageName) return@launch
+                _releaseTranslation.value = ReleaseTranslationState(
+                    language = target,
+                    texts = translated,
+                )
+                if (announce && translated.isEmpty()) {
+                    message("Release notes are already in ${displayLanguage(target)}")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _releaseTranslation.value = null
+                if (announce) message(e.message ?: "Could not translate these release notes")
             }
         }
     }
@@ -1702,7 +1783,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         settings.setTranslateLanguage(language)
         _translations.value = emptyMap()
         _readmeTranslation.value = null
+        _releaseTranslation.value = null
         readmeTranslationJob?.cancel()
+        releaseTranslationJob?.cancel()
     }
 
     /** Translates descriptions that have no saved translation yet, two at a time. */

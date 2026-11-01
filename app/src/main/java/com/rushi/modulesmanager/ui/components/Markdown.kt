@@ -18,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.rushi.modulesmanager.data.ReadmeTranslator
 import com.rushi.modulesmanager.data.stripHtml
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.node.BlockQuote
@@ -52,7 +55,6 @@ import org.commonmark.node.StrongEmphasis
 import org.commonmark.node.Text as MarkdownText
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
-import org.commonmark.renderer.text.TextContentRenderer
 
 /**
  * Release bodies arrive as raw Markdown from the GitHub API. Rendering the
@@ -60,11 +62,11 @@ import org.commonmark.renderer.text.TextContentRenderer
  * syntax characters.
  */
 private val markdownParser = Parser.builder().build()
-private val markdownTextRenderer = TextContentRenderer.builder().build()
 
 /** Markdown with its syntax markers removed, for collapsed previews. */
-fun markdownPlainText(markdown: String): String =
-    markdownTextRenderer.render(markdownParser.parse(markdown)).trim()
+fun markdownPlainText(markdown: String): String = ReadmeTranslator.plainText(markdown)
+
+private val LocalMarkdownTranslations = compositionLocalOf<Map<String, String>> { emptyMap() }
 
 private data class MarkdownColors(
     val text: Color,
@@ -75,7 +77,11 @@ private data class MarkdownColors(
 )
 
 @Composable
-fun MarkdownBlocks(markdown: String, modifier: Modifier = Modifier) {
+fun MarkdownBlocks(
+    markdown: String,
+    modifier: Modifier = Modifier,
+    translations: Map<String, String> = emptyMap(),
+) {
     val document = remember(markdown) { markdownParser.parse(markdown) }
     val colors = MarkdownColors(
         text = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -84,14 +90,16 @@ fun MarkdownBlocks(markdown: String, modifier: Modifier = Modifier) {
         codeBackground = MaterialTheme.colorScheme.surfaceVariant,
         rule = MaterialTheme.colorScheme.outlineVariant,
     )
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        var block = document.firstChild
-        while (block != null) {
-            MarkdownBlock(block, colors)
-            block = block.next
+    CompositionLocalProvider(LocalMarkdownTranslations provides translations) {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            var block = document.firstChild
+            while (block != null) {
+                MarkdownBlock(block, colors)
+                block = block.next
+            }
         }
     }
 }
@@ -232,8 +240,9 @@ private fun InlineMarkdown(
     colors: MarkdownColors,
     color: Color = colors.text,
 ) {
-    val annotated = remember(node, colors) {
-        buildAnnotatedString { appendInline(node, colors) }
+    val translations = LocalMarkdownTranslations.current
+    val annotated = remember(node, colors, translations) {
+        buildAnnotatedString { appendInline(node, colors, translations) }
     }
     if (annotated.text.isNotBlank()) {
         Text(text = annotated, style = style, color = color)
@@ -243,16 +252,17 @@ private fun InlineMarkdown(
 private fun androidx.compose.ui.text.AnnotatedString.Builder.appendInline(
     node: Node,
     colors: MarkdownColors,
+    translations: Map<String, String>,
 ) {
     var child = node.firstChild
     while (child != null) {
         when (child) {
-            is MarkdownText -> append(child.literal)
+            is MarkdownText -> append(translations[child.literal] ?: child.literal)
             is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                appendInline(child, colors)
+                appendInline(child, colors, translations)
             }
             is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                appendInline(child, colors)
+                appendInline(child, colors, translations)
             }
             is Code -> {
                 val literal = child.literal
@@ -265,12 +275,12 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.appendInline(
             is Link -> withStyle(
                 SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline),
             ) {
-                appendInline(child, colors)
+                appendInline(child, colors, translations)
             }
             is SoftLineBreak -> append(' ')
             is HardLineBreak -> append('\n')
             is HtmlInline -> Unit
-            else -> appendInline(child, colors)
+            else -> appendInline(child, colors, translations)
         }
         child = child.next
     }

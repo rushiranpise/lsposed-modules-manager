@@ -132,9 +132,13 @@ fun ModuleDetailScreen(
     val channel by viewModel.channel.collectAsStateWithLifecycle()
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val readmeTranslation by viewModel.readmeTranslation.collectAsStateWithLifecycle()
+    val releaseTranslation by viewModel.releaseTranslation.collectAsStateWithLifecycle()
+    val autoTranslate by viewModel.autoTranslate.collectAsStateWithLifecycle()
+    val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOriginalReadme by rememberSaveable(packageName) { mutableStateOf(false) }
+    var showOriginalReleases by rememberSaveable(packageName) { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf(false) }
     var sourceInput by remember { mutableStateOf("") }
 
@@ -151,6 +155,9 @@ fun ModuleDetailScreen(
     val primaryAsset = release?.preferredAsset(packageName)
 
     LaunchedEffect(packageName) { viewModel.openModule(packageName) }
+    LaunchedEffect(tab, module?.packageName, autoTranslate, translateLanguage) {
+        if (tab == 1 && autoTranslate) viewModel.translateReleases(announce = false)
+    }
     DisposableEffect(packageName) {
         onDispose { viewModel.closeModule() }
     }
@@ -185,22 +192,45 @@ fun ModuleDetailScreen(
                             },
                         )
                     }
-                    if (tab == 0 && module != null) {
-                        val translating = readmeTranslation?.loading == true
-                        val translated = readmeTranslation?.html != null
+                    if ((tab == 0 || tab == 1) && module != null) {
+                        val readme = tab == 0
+                        val translating = if (readme) {
+                            readmeTranslation?.loading == true
+                        } else {
+                            releaseTranslation?.loading == true
+                        }
+                        val translated = if (readme) {
+                            readmeTranslation?.html != null
+                        } else {
+                            releaseTranslation?.translated == true
+                        }
+                        val progress = if (readme) {
+                            readmeTranslation?.progress ?: 0f
+                        } else {
+                            releaseTranslation?.progress ?: 0f
+                        }
+                        val showOriginal = if (readme) showOriginalReadme else showOriginalReleases
                         IconButton(
                             enabled = !translating,
                             onClick = {
                                 if (translated) {
-                                    showOriginalReadme = !showOriginalReadme
+                                    if (readme) {
+                                        showOriginalReadme = !showOriginalReadme
+                                    } else {
+                                        showOriginalReleases = !showOriginalReleases
+                                    }
                                 } else {
-                                    showOriginalReadme = false
-                                    viewModel.translateReadme()
+                                    if (readme) {
+                                        showOriginalReadme = false
+                                        viewModel.translateReadme()
+                                    } else {
+                                        showOriginalReleases = false
+                                        viewModel.translateReleases()
+                                    }
                                 }
                             },
                         ) {
                             if (translating) {
-                                val progress = readmeTranslation?.progress ?: 0f
                                 if (progress > 0f) {
                                     CircularProgressIndicator(
                                         progress = { progress },
@@ -217,11 +247,15 @@ fun ModuleDetailScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Translate,
                                     contentDescription = when {
-                                        !translated -> "Translate README"
-                                        showOriginalReadme -> "Show translation"
+                                        !translated -> if (readme) {
+                                            "Translate README"
+                                        } else {
+                                            "Translate release notes"
+                                        }
+                                        showOriginal -> "Show translation"
                                         else -> "Show original"
                                     },
-                                    tint = if (translated && !showOriginalReadme) {
+                                    tint = if (translated && !showOriginal) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
                                         LocalContentColor.current
@@ -335,6 +369,11 @@ fun ModuleDetailScreen(
                     1 -> ReleasesTab(
                         module = module,
                         loading = loading,
+                        translations = if (showOriginalReleases) {
+                            emptyMap()
+                        } else {
+                            releaseTranslation?.texts.orEmpty()
+                        },
                         onInstall = { asset ->
                             viewModel.installChosen(module, asset)
                         },
@@ -733,6 +772,7 @@ private fun wrapReadme(html: String, dark: Boolean): String {
 private fun ReleasesTab(
     module: RepoModule,
     loading: Boolean,
+    translations: Map<String, String>,
     onInstall: (RepoAsset) -> Unit,
     onOpenRelease: (String?) -> Unit,
 ) {
@@ -757,6 +797,7 @@ private fun ReleasesTab(
         items(releases, key = { it.url ?: it.tagName ?: it.toString() }) { item ->
             ReleaseCard(
                 release = item,
+                translations = translations,
                 onInstall = onInstall,
                 onOpenRelease = { onOpenRelease(item.url) },
             )
@@ -767,6 +808,7 @@ private fun ReleasesTab(
 @Composable
 private fun ReleaseCard(
     release: RepoRelease,
+    translations: Map<String, String>,
     onInstall: (RepoAsset) -> Unit,
     onOpenRelease: () -> Unit,
 ) {
@@ -801,24 +843,30 @@ private fun ReleaseCard(
                     }
                 }
             }
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 10.dp, bottom = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
             val rawNotes = release.descriptionHtml
             val htmlNotes = remember(rawNotes) { rawNotes != null && looksLikeHtml(rawNotes) }
             val plainNotes = remember(rawNotes, htmlNotes) {
                 rawNotes?.let { if (htmlNotes) stripHtml(it) else markdownPlainText(it) }
             }
             val markdownNotes = rawNotes.takeUnless { htmlNotes }
-            if (!plainNotes.isNullOrBlank()) {
+            val translatedPlain = plainNotes?.let { translations[it] } ?: plainNotes
+            if (!translatedPlain.isNullOrBlank()) {
                 var expanded by rememberSaveable { mutableStateOf(false) }
                 var canExpand by rememberSaveable { mutableStateOf(false) }
                 Spacer(Modifier.height(8.dp))
                 if (expanded && markdownNotes != null) {
                     MarkdownBlocks(
                         markdown = markdownNotes,
+                        translations = translations,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     Text(
-                        text = plainNotes,
+                        text = translatedPlain,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = if (expanded) Int.MAX_VALUE else 4,

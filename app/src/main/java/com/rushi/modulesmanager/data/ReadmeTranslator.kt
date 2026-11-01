@@ -6,6 +6,7 @@ import org.commonmark.node.Node
 import org.commonmark.node.Text
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
+import org.commonmark.renderer.text.TextContentRenderer
 
 /**
  * Translates a Markdown README. Only prose is sent to the translator, so links, images, code
@@ -27,6 +28,23 @@ object ReadmeTranslator {
     private val renderer = HtmlRenderer.builder()
         .extensions(listOf(TablesExtension.create()))
         .build()
+    private val textRenderer = TextContentRenderer.builder().build()
+
+    private val HTML_TAG = Regex(
+        "<\\s*/?\\s*(p|h[1-6]|ul|ol|li|div|br|img|a|strong|em|pre|code|table|tr|td|th|blockquote|span)\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** True when a release body is already rendered HTML instead of Markdown. */
+    fun looksLikeHtml(value: String): Boolean = HTML_TAG.containsMatchIn(value)
+
+    /** Prose fragments that [translate] sends to Google, in document order. */
+    fun proseTexts(markdown: String): List<String> =
+        collectTextNodes(parser.parse(markdown)).map { it.literal }
+
+    /** Markdown with its syntax markers removed, matching the collapsed release preview. */
+    fun plainText(markdown: String): String =
+        textRenderer.render(parser.parse(markdown)).trim()
 
     suspend fun translate(
         markdown: String,
