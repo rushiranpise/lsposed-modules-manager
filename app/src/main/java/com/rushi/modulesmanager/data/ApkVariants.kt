@@ -111,6 +111,19 @@ object ApkVariants {
             .map { (trait, _) -> trait.asset }
     }
 
+    /**
+     * True when the asset's debug flavor can belong to [packageName]. A package ending in
+     * `.debug` needs a debug APK, and everything else prefers a release APK.
+     */
+    fun matchesFlavor(asset: RepoAsset, packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return true
+        return traits(asset).debug == packageName.endsWith(".debug", ignoreCase = true)
+    }
+
+    /** Assets with the flavor [packageName] expects; empty when the release has none. */
+    fun flavorMatches(assets: List<RepoAsset>, packageName: String?): List<RepoAsset> =
+        assets.filter { matchesFlavor(it, packageName) }
+
     /** Returns the asset to install, or null when every asset is unusable on this device. */
     fun pick(
         assets: List<RepoAsset>,
@@ -303,6 +316,12 @@ object ApkVariants {
     }
 }
 
-/** The asset a single-tap install should use. Falls back to the first APK. */
-fun RepoRelease.preferredAsset(): RepoAsset? =
-    ApkVariants.pick(apkAssets) ?: apkAssets.firstOrNull()
+/**
+ * The asset a single-tap install should use. Assets matching the module package's debug
+ * flavor win, so a `.debug` module does not get the release APK (and fail the package
+ * check after downloading). Falls back to the first APK.
+ */
+fun RepoRelease.preferredAsset(packageName: String? = null): RepoAsset? {
+    val matching = ApkVariants.flavorMatches(apkAssets, packageName)
+    return ApkVariants.pick(matching.ifEmpty { apkAssets }) ?: apkAssets.firstOrNull()
+}

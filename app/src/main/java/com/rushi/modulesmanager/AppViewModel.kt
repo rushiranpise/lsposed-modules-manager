@@ -1413,7 +1413,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     val remembered = container.moduleState.variantFor(packageName)
                                         ?.let(ApkVariants::decode)
                                         ?.let { ApkVariants.match(it, release.apkAssets) }
-                                    val asset = remembered ?: release.preferredAsset()
+                                        ?.takeIf { ApkVariants.matchesFlavor(it, packageName) }
+                                    val asset = remembered ?: release.preferredAsset(packageName)
                                         ?: throw IllegalStateException("No APK asset")
                                     updateBatchItem(packageName) { it.copy(total = asset.size) }
                                     val destination = apkDestination(appContext, update.module, asset)
@@ -1614,21 +1615,25 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Installs the release, using the remembered variant before asking again. */
     fun installRelease(module: RepoModule, release: RepoRelease?) {
+        val assets = release?.apkAssets.orEmpty()
         val remembered = container.moduleState.variantFor(module.packageName)
             ?.let(ApkVariants::decode)
-            ?.let { ApkVariants.match(it, release?.apkAssets.orEmpty()) }
+            ?.let { ApkVariants.match(it, assets) }
+            ?.takeIf { ApkVariants.matchesFlavor(it, module.packageName) }
         if (remembered != null) {
             install(module, remembered)
             return
         }
-        val options = release?.let { ApkVariants.bestChoices(it.apkAssets) }.orEmpty()
+        val candidates = ApkVariants.flavorMatches(assets, module.packageName)
+            .ifEmpty { assets }
+        val options = if (release != null) ApkVariants.bestChoices(candidates) else emptyList()
         when {
             options.size > 1 && release != null -> {
                 _variantChoice.value = VariantChoice(module, release, options)
             }
             options.size == 1 -> install(module, options.first())
             else -> {
-                val fallback = release?.preferredAsset()
+                val fallback = release?.preferredAsset(module.packageName)
                 if (fallback != null) {
                     install(module, fallback)
                 } else {

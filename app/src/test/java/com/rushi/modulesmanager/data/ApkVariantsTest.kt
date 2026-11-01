@@ -1,6 +1,7 @@
 package com.rushi.modulesmanager.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +41,24 @@ class ApkVariantsTest {
         )
 
         assertEquals("module-api102-arm64-v8a.apk", choices.single().name)
+    }
+
+    @Test
+    fun `matches the debug apk to a debug package`() {
+        assertTrue(ApkVariants.matchesFlavor(asset("app-debug.apk"), "app.valenced.xposed.debug"))
+        assertFalse(ApkVariants.matchesFlavor(asset("app-release.apk"), "app.valenced.xposed.debug"))
+    }
+
+    @Test
+    fun `matches the release apk to a regular package`() {
+        assertTrue(ApkVariants.matchesFlavor(asset("app-release.apk"), "app.valenced.xposed"))
+        assertFalse(ApkVariants.matchesFlavor(asset("app-debug.apk"), "app.valenced.xposed"))
+    }
+
+    @Test
+    fun `keeps every asset when the package is unknown`() {
+        assertTrue(ApkVariants.matchesFlavor(asset("app-debug.apk"), null))
+        assertTrue(ApkVariants.matchesFlavor(asset("app-release.apk"), null))
     }
 
     private fun asset(name: String) = RepoAsset(

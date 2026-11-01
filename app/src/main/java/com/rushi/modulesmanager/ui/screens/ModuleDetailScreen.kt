@@ -144,7 +144,7 @@ fun ModuleDetailScreen(
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val sourceAlternatives by viewModel.sourceAlternatives.collectAsStateWithLifecycle()
     val release = module?.releaseFor(channel)
-    val primaryAsset = release?.preferredAsset()
+    val primaryAsset = release?.preferredAsset(packageName)
 
     LaunchedEffect(packageName) { viewModel.openModule(packageName) }
     DisposableEffect(packageName) {
