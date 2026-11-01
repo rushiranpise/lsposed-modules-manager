@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.rushi.modulesmanager.BatchPhase
+import com.rushi.modulesmanager.BatchUpdateState
 import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
@@ -467,6 +469,96 @@ fun DownloadBanner(
                         .clip(RoundedCornerShape(2.dp)),
                 )
             }
+        }
+    }
+}
+
+/** Batch update progress, styled like the download and message banners. */
+@Composable
+fun BatchUpdateBanner(
+    state: BatchUpdateState,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val amoled = LocalAmoled.current
+    val fraction = if (state.total > 0) state.finished.toFloat() / state.total else 0f
+    val failedItems = state.items.values.filter { it.phase == BatchPhase.FAILED }
+    val firstFailure = failedItems.firstOrNull()
+    Surface(
+        color = if (amoled) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = if (amoled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
+        tonalElevation = 3.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (state.running) {
+                        Icons.Outlined.InstallMobile
+                    } else {
+                        Icons.Outlined.ErrorOutline
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (state.running) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+                Spacer(Modifier.size(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when {
+                            !state.running -> "Updates interrupted"
+                            state.current != null -> "Installing ${state.current}"
+                            else -> "Preparing updates"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = buildString {
+                            append("${state.finished} of ${state.total} done")
+                            if (failedItems.isNotEmpty()) append(" - ${failedItems.size} failed")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!state.running && firstFailure != null) {
+                        Text(
+                            text = "${firstFailure.title}: ${firstFailure.error.orEmpty()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                IconButton(onClick = if (state.running) onCancel else onDismiss) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = if (state.running) "Cancel update" else "Dismiss",
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+            )
         }
     }
 }

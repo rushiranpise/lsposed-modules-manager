@@ -75,7 +75,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.BatchItemState
 import com.rushi.modulesmanager.BatchPhase
-import com.rushi.modulesmanager.BatchUpdateState
 import com.rushi.modulesmanager.ModuleUpdate
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
@@ -104,6 +103,7 @@ fun InstalledScreen(
     val updates by viewModel.updates.collectAsStateWithLifecycle()
     val modules by viewModel.modules.collectAsStateWithLifecycle()
     val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
+    val batchActive = batch?.let { it.running || it.interrupted } == true
     val download by viewModel.downloads.collectAsStateWithLifecycle()
     val ignoredUpdates by viewModel.ignoredUpdates.collectAsStateWithLifecycle()
     val preReleaseModules by viewModel.preReleaseModules.collectAsStateWithLifecycle()
@@ -247,7 +247,7 @@ fun InstalledScreen(
                 )
             }
 
-            if (updates.isNotEmpty()) {
+            if (updates.isNotEmpty() && !batchActive) {
                 FilledTonalButton(
                     onClick = viewModel::updateAll,
                     modifier = Modifier
@@ -435,15 +435,6 @@ fun InstalledScreen(
                 viewModel.linkModule(module.packageName, url)
                 linkingModule = null
             },
-        )
-    }
-
-    val visibleBatch = batch
-    if (visibleBatch != null && (visibleBatch.running || visibleBatch.interrupted)) {
-        BatchProgressDialog(
-            state = visibleBatch,
-            onCancel = viewModel::cancelBatch,
-            onDismiss = viewModel::dismissBatch,
         )
     }
 }
@@ -805,59 +796,4 @@ private fun BatchItemProgress(item: BatchItemState, onCancel: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun BatchProgressDialog(
-    state: BatchUpdateState,
-    onCancel: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val fraction = if (state.total > 0) state.finished.toFloat() / state.total else 0f
-    val failedItems = state.items.values.filter { it.phase == BatchPhase.FAILED }
-    val firstFailure = failedItems.firstOrNull()
-    AlertDialog(
-        onDismissRequest = { if (!state.running) onDismiss() },
-        title = {
-            Text(
-                when {
-                    !state.running -> "Updates interrupted"
-                    state.current != null -> "Installing ${state.current}"
-                    else -> "Preparing updates"
-                },
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = buildString {
-                        append("${state.finished} of ${state.total} done")
-                        if (failedItems.isNotEmpty()) append(" - ${failedItems.size} failed")
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (!state.running && firstFailure != null) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "${firstFailure.title}: ${firstFailure.error.orEmpty()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            if (state.running) {
-                TextButton(onClick = onCancel) { Text("Cancel") }
-            } else {
-                TextButton(onClick = onDismiss) { Text("Dismiss") }
-            }
-        },
-    )
 }

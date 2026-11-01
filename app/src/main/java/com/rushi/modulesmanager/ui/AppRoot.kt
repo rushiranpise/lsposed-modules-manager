@@ -80,6 +80,7 @@ import androidx.navigation.compose.rememberNavController
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.formatBytes
+import com.rushi.modulesmanager.ui.components.BatchUpdateBanner
 import com.rushi.modulesmanager.ui.components.DownloadBanner
 import com.rushi.modulesmanager.ui.screens.DeveloperScreen
 import com.rushi.modulesmanager.ui.screens.DiagnosticsScreen
@@ -102,6 +103,8 @@ fun AppRoot(viewModel: AppViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val download by viewModel.downloads.collectAsStateWithLifecycle()
+    val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
+    val activeBatch = batch?.takeIf { it.running || it.interrupted }
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
     val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -148,6 +151,13 @@ fun AppRoot(viewModel: AppViewModel) {
                         .padding(padding)
                         .fillMaxSize(),
                 ) {
+                    activeBatch?.let { state ->
+                        BatchUpdateBanner(
+                            state = state,
+                            onCancel = viewModel::cancelBatch,
+                            onDismiss = viewModel::dismissBatch,
+                        )
+                    }
                     download?.let { state ->
                         DownloadBanner(
                             state = state,
@@ -195,6 +205,15 @@ fun AppRoot(viewModel: AppViewModel) {
                         .fillMaxWidth(),
                 ) {
                     if (!showBottomBar) {
+                        activeBatch?.let { state ->
+                            Box(modifier = Modifier.navigationBarsPadding()) {
+                                BatchUpdateBanner(
+                                    state = state,
+                                    onCancel = viewModel::cancelBatch,
+                                    onDismiss = viewModel::dismissBatch,
+                                )
+                            }
+                        }
                         download?.let { state ->
                             Box(modifier = Modifier.navigationBarsPadding()) {
                                 DownloadBanner(
@@ -206,6 +225,13 @@ fun AppRoot(viewModel: AppViewModel) {
                             }
                         }
                     } else {
+                        activeBatch?.let { state ->
+                            BatchUpdateBanner(
+                                state = state,
+                                onCancel = viewModel::cancelBatch,
+                                onDismiss = viewModel::dismissBatch,
+                            )
+                        }
                         download?.let { state ->
                             DownloadBanner(
                                 state = state,
