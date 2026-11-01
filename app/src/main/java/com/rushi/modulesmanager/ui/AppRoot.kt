@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -131,7 +133,30 @@ fun AppRoot(viewModel: AppViewModel) {
                     SnackbarHost(
                         hostState = snackbarHostState,
                         modifier = Modifier.padding(bottom = if (wide) 0.dp else 96.dp),
-                    )
+                    ) { data ->
+                        val amoled = LocalAmoled.current
+                        val shape = RoundedCornerShape(12.dp)
+                        Snackbar(
+                            snackbarData = data,
+                            containerColor = if (amoled) {
+                                Color.Black
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            actionColor = MaterialTheme.colorScheme.primary,
+                            shape = shape,
+                            modifier = if (amoled) {
+                                Modifier.border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    shape,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                 },
             ) { padding ->
             if (wide) {
