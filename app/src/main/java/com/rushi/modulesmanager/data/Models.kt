@@ -271,6 +271,22 @@ data class ModuleVersion(val code: Long, val name: String) {
     }
 
     /**
+     * Compares two repository versions. Some modules keep a constant versionCode and put the
+     * build date in the name (xviphook publishes 8-260926, 8-261101, and so on), so for an
+     * equal code the publish time decides which release is newer.
+     */
+    fun isNewerThan(other: ModuleVersion, otherPublishedAt: String?, publishedAt: String?): Boolean {
+        if (code > 0L && other.code > 0L) {
+            if (code != other.code) return code > other.code
+            val current = parseInstant(publishedAt)?.toEpochMilli()
+            val previous = parseInstant(otherPublishedAt)?.toEpochMilli()
+            if (current != null && previous != null) return current > previous
+            return compareVersionNames(name, other.name) > 0
+        }
+        return isNewerThan(other.code, other.name)
+    }
+
+    /**
      * LSPosed treats a same-code re-upload as an update, but only when the release was published
      * after the installed copy landed. Without the timestamp, naming drift would report an update
      * forever and installing it would never clear the prompt.

@@ -579,13 +579,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 val liveVersion = ModuleVersion.parse(live.tag) ?: return@withPermit
                                 val dailyVersion = ModuleVersion.parse(module.latestRelease)
                                 if (dailyVersion != null &&
-                                    !liveVersion.isNewerThan(dailyVersion.code, dailyVersion.name)
+                                    !liveVersion.isNewerThan(
+                                        dailyVersion,
+                                        module.latestReleaseTime,
+                                        live.publishedAt,
+                                    )
                                 ) {
                                     return@withPermit
                                 }
-                                if (!liveVersion.isNewerThan(item.versionCode, item.versionName)) {
-                                    return@withPermit
+                                // A re-upload can keep the versionCode: xviphook publishes
+                                // 8-260926 and 8-261101 with code 8. Let the install time
+                                // decide when the codes match.
+                                val installedVersion = _installedVersions.value[item.packageName]
+                                val isUpdate = if (installedVersion != null) {
+                                    liveVersion.isUpdateOver(installedVersion, live.publishedAt)
+                                } else {
+                                    liveVersion.isNewerThan(item.versionCode, item.versionName)
                                 }
+                                if (!isUpdate) return@withPermit
                                 val release = live.toRepoRelease()
                                 container.repo.applyLiveRelease(module.packageName, live.tag, release)
                                 _detail.value = _detail.value?.let { detail ->

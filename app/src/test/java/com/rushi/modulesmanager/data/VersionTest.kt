@@ -32,4 +32,27 @@ class VersionTest {
         assertFalse(ModuleVersion.parse("v1.2.0")!!.isNewerThan(0, "1.2.0"))
         assertTrue(ModuleVersion.parse("v1.2.1")!!.isNewerThan(0, "1.2"))
     }
+
+    @Test
+    fun `same-code releases compare by publish time`() {
+        val daily = ModuleVersion.parse("8-260802")!!
+        val live = ModuleVersion.parse("8-261101")!!
+
+        assertTrue(live.isNewerThan(daily, "2026-08-02T18:17:38Z", "2026-11-01T13:24:42Z"))
+        assertFalse(daily.isNewerThan(live, "2026-11-01T13:24:42Z", "2026-08-02T18:17:38Z"))
+        assertTrue(live.isNewerThan(daily, null, null))
+    }
+
+    @Test
+    fun `same-code re-upload counts as an update when it is newer than the install`() {
+        val installed = InstalledPackageVersion(
+            versionName = "260926",
+            versionCode = 8,
+            lastUpdateTime = java.time.Instant.parse("2026-09-26T17:43:33Z").toEpochMilli(),
+        )
+        val latest = ModuleVersion.parse("8-261101")!!
+
+        assertTrue(latest.isUpdateOver(installed, "2026-11-01T13:24:42Z"))
+        assertFalse(latest.isUpdateOver(installed, "2026-09-20T00:00:00Z"))
+    }
 }
