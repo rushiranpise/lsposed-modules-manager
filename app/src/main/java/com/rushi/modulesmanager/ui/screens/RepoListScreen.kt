@@ -557,20 +557,27 @@ private fun ModuleShelf(
                     border = amoledCardBorder(),
                     modifier = Modifier
                         .width(170.dp)
+                        .height(74.dp)
                         .clickable { onOpen(module.packageName) },
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .fillMaxHeight()
                             .padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.Top,
                     ) {
                         ModuleAvatar(module, size = 32.dp)
                         Spacer(Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                        ) {
                             Text(
                                 text = module.displayName,
                                 style = MaterialTheme.typography.labelLarge,
+                                minLines = 2,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
