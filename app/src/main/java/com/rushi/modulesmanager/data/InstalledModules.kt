@@ -91,6 +91,9 @@ class InstalledModuleScanner(private val context: Context) {
     private fun packageInfoWithMetadata(packageName: String): PackageInfo? = try {
         @Suppress("DEPRECATION")
         pm.getPackageInfo(packageName, PackageManager.GET_META_DATA)
+    } catch (_: PackageManager.NameNotFoundException) {
+        // The package vanished between the list call and this lookup.
+        null
     } catch (e: RuntimeException) {
         Log.w(TAG, "Skipping metadata for $packageName", e)
         null
