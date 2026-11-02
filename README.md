@@ -9,6 +9,9 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 
 ## What's new in 2.2
 
+- Installed update checks now catch releases that keep the same version code but publish a newer build, including re-uploaded APKs.
+- Installed libxposed modules shipped as split APKs are detected from their module markers.
+- Batch update progress uses the bottom banner style, with the current module, done count, cancel and dismiss actions.
 - Open every module by the same GitHub developer from the author pill on a module page or **More by <author>** in a card menu.
 - Cards show an outlined package pill, a gold star count, a gray fork count, a red favourite heart and a source badge when the index lists several repositories.
 - Long descriptions expand with **Read more**. The card menu can copy the package name, open the releases list or open the developer page.
