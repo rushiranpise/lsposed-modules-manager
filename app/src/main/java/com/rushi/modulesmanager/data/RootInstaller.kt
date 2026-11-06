@@ -4,6 +4,7 @@ import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Installs through a root shell. This is the only fully silent path for fresh installs when
@@ -11,13 +12,29 @@ import java.io.File
  */
 object RootInstaller {
 
-    /** Opens the shell so the root manager can ask for access, then reports whether it was granted. */
-    suspend fun isAvailable(): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            Shell.getCachedShell() ?: Shell.getShell()
-            Shell.isAppGrantedRoot() == true
-        }.getOrDefault(false)
-    }
+    /**
+     * Opens a root shell with a hard timeout, then reports whether access was granted.
+     * The process is destroyed on timeout so a stuck root manager cannot block the
+     * installer selection forever.
+     */
+    suspend fun isAvailable(timeoutMs: Long = ROOT_CHECK_TIMEOUT_MS): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val process = ProcessBuilder("su", "-c", "id")
+                    .redirectErrorStream(true)
+                    .start()
+                try {
+                    if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                        process.destroyForcibly()
+                        return@runCatching false
+                    }
+                    val output = process.inputStream.bufferedReader().use { it.readText() }
+                    process.exitValue() == 0 && output.contains("uid=0")
+                } finally {
+                    if (process.isAlive) process.destroyForcibly()
+                }
+            }.getOrDefault(false)
+        }
 
     /** Returns null on success, or the shell output describing the failure. */
     suspend fun install(apk: File, installerPackage: String): String? = withContext(Dispatchers.IO) {
@@ -55,4 +72,6 @@ object RootInstaller {
     }
 
     private fun String.shellQuoted(): String = "'" + replace("'", "'\\''") + "'"
+
+    private const val ROOT_CHECK_TIMEOUT_MS = 15_000L
 }
