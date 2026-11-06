@@ -275,6 +275,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var batchPersisting = false
     private val batchItemJobs = mutableMapOf<String, Job>()
     private val batchItemFiles = mutableMapOf<String, File>()
+    /**
+     * Packages whose update is resolving its release but has not started a download yet.
+     * Without this, a rapid second tap or "Update all" can start the same package twice.
+     */
+    private val startingUpdates = mutableSetOf<String>()
     private var shizukuPermissionJob: Job? = null
     private var installedRebuildJob: Job? = null
     private var liveCheckJob: Job? = null
@@ -1566,11 +1571,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun updateAll() {
         if (batchJob?.isActive == true || downloadJob?.isActive == true) return
-        val targets = updates.value
-        if (targets.isEmpty()) {
+        val available = updates.value
+        if (available.isEmpty()) {
             message("No updates available")
             return
         }
+        val targets = available.filterNot { it.module.packageName in startingUpdates }
+        if (targets.isEmpty()) return
         val appContext = container.appContext
         val installerType = settings.installer.value
         if ((installerType == InstallerType.SYSTEM || installerType == InstallerType.SESSION) &&
@@ -1814,22 +1821,37 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Resolves the newest APK for an installed module and starts installing it. */
+    /**
+     * Resolves the newest APK for an installed module and starts installing it.
+     * The package is claimed before the suspension point so a second tap cannot
+     * resolve and install the same update again.
+     */
     fun installLatest(module: RepoModule) {
+        val packageName = module.packageName
+        if (packageName in startingUpdates) return
+        if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
+            message("Wait for the current install to finish")
+            return
+        }
+        startingUpdates += packageName
         viewModelScope.launch {
-            val detailed = loadDetailedModule(module.packageName) ?: module
-            val includePreRelease = includePreReleases(detailed)
-            val latest = detailed.latestFor(includePreRelease)
-            val release = if (latest != null) {
-                detailed.releaseForVersion(latest, includePreRelease)
-            } else {
-                detailed.releaseFor(channel.value)
+            try {
+                val detailed = loadDetailedModule(packageName) ?: module
+                val includePreRelease = includePreReleases(detailed)
+                val latest = detailed.latestFor(includePreRelease)
+                val release = if (latest != null) {
+                    detailed.releaseForVersion(latest, includePreRelease)
+                } else {
+                    detailed.releaseFor(channel.value)
+                }
+                if (latest != null && release != null && !release.matchesVersion(latest)) {
+                    message("The repository is still serving an older release")
+                    return@launch
+                }
+                installRelease(detailed, release)
+            } finally {
+                startingUpdates -= packageName
             }
-            if (latest != null && release != null && !release.matchesVersion(latest)) {
-                message("The repository is still serving an older release")
-                return@launch
-            }
-            installRelease(detailed, release)
         }
     }
 
