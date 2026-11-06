@@ -1,6 +1,11 @@
 package com.rushi.modulesmanager.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -56,7 +61,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,9 +72,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -98,6 +108,28 @@ private enum class Destination(val route: String, val label: String, val icon: I
     SETTINGS("settings", "Settings", Icons.Outlined.Settings),
 }
 
+/**
+ * The notification permission only gates the download progress notification, so ask when there
+ * is an active download rather than on every cold start. The prompt is capped to one per
+ * composition lifetime; Settings always offers the system notification controls afterwards.
+ */
+@Composable
+private fun RequestNotificationPermissionOnDownload(downloading: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var asked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(downloading) {
+        if (!downloading || asked) return@LaunchedEffect
+        asked = true
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
+
 @Composable
 fun AppRoot(viewModel: AppViewModel) {
     val navController = rememberNavController()
@@ -105,6 +137,9 @@ fun AppRoot(viewModel: AppViewModel) {
     val download by viewModel.downloads.collectAsStateWithLifecycle()
     val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
     val activeBatch = batch?.takeIf { it.running || it.interrupted }
+    RequestNotificationPermissionOnDownload(
+        downloading = download != null || batch?.running == true,
+    )
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
     val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()

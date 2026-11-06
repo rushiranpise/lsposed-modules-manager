@@ -1,8 +1,6 @@
 package com.rushi.modulesmanager
 
-import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,9 +17,6 @@ import com.rushi.modulesmanager.ui.theme.ModulesManagerTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
     private val installedAppsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -29,12 +24,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as ModulesManagerApplication).container
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
         requestInstalledAppsPermission(container.settings)
         setContent {
             val systemDark = isSystemInDarkTheme()

@@ -1,5 +1,8 @@
 package com.rushi.modulesmanager.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.outlined.InstallMobile
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Speed
@@ -44,6 +48,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -55,7 +60,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rushi.modulesmanager.AppViewModel
 import com.rushi.modulesmanager.BuildConfig
@@ -81,6 +91,10 @@ fun SettingsScreen(
     val translateLanguage by viewModel.translateLanguage.collectAsStateWithLifecycle()
     val download by viewModel.downloads.collectAsStateWithLifecycle()
     val concurrentDownloads by viewModel.concurrentDownloads.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var notificationsEnabled by remember {
+        mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
 
     var showChannelDialog by remember { mutableStateOf(false) }
     var showInstallerDialog by remember { mutableStateOf(false) }
@@ -92,6 +106,18 @@ fun SettingsScreen(
 
     LaunchedEffect(showInstallerDialog) {
         if (showInstallerDialog) viewModel.refreshShizukuStatus()
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsEnabled =
+                    NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -175,6 +201,16 @@ fun SettingsScreen(
                 title = "Concurrent downloads",
                 subtitle = "$concurrentDownloads at a time",
                 onClick = { showDownloadsDialog = true },
+            )
+            SettingsRow(
+                icon = Icons.Outlined.Notifications,
+                title = "Notifications",
+                subtitle = if (notificationsEnabled) {
+                    "Update alerts and download progress"
+                } else {
+                    "Off - tap to enable"
+                },
+                onClick = { openNotificationSettings(context) },
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -586,5 +622,11 @@ private fun SettingsRow(
             )
         }
     }
+}
+
+private fun openNotificationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+    runCatching { context.startActivity(intent) }
 }
 
