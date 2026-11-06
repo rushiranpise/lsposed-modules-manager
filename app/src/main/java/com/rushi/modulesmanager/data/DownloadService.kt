@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.rushi.modulesmanager.BatchUpdateState
 import com.rushi.modulesmanager.MainActivity
 import com.rushi.modulesmanager.ModulesManagerApplication
 import kotlinx.coroutines.CoroutineScope
@@ -16,11 +17,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the process alive while an APK is downloading and shows its progress. The transfer
- * itself lives in [RepoApi], so this only mirrors [DownloadCenter.State] into a notification.
+ * Keeps the process alive while an APK or a batch is downloading and mirrors
+ * [DownloadCenter.State] or [BatchUpdateState] progress into the foreground notification.
  */
 class DownloadService : Service() {
 
@@ -30,14 +32,16 @@ class DownloadService : Service() {
         super.onCreate()
         createChannel()
         val container = (application as ModulesManagerApplication).container
-        startForeground(NOTIFICATION_ID, buildNotification(null))
+        startForeground(NOTIFICATION_ID, buildNotification(null, null))
         scope.launch {
-            container.downloads.state.collect { state ->
-                if (state == null) {
+            combine(container.downloads.state, container.batchUpdate) { download, batch ->
+                download to batch?.takeIf { it.running }
+            }.collect { (download, batch) ->
+                if (download == null && batch == null) {
                     stopSelf()
                 } else {
                     val manager = getSystemService(NotificationManager::class.java)
-                    manager?.notify(NOTIFICATION_ID, buildNotification(state))
+                    manager?.notify(NOTIFICATION_ID, buildNotification(download, batch))
                 }
             }
         }
@@ -60,13 +64,16 @@ class DownloadService : Service() {
                 "Downloads",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "APK download progress"
+                description = "APK download and batch update progress"
                 setShowBadge(false)
             },
         )
     }
 
-    private fun buildNotification(state: DownloadCenter.State?): android.app.Notification {
+    private fun buildNotification(
+        download: DownloadCenter.State?,
+        batch: BatchUpdateState?,
+    ): android.app.Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -75,18 +82,45 @@ class DownloadService : Service() {
         )
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(state?.label ?: "Preparing download")
-            .setContentText(
-                if (state?.paused == true) "Paused - ${state.fileName}" else state?.fileName.orEmpty(),
-            )
             .setContentIntent(open)
             .setOnlyAlertOnce(true)
             .setOngoing(true)
-        val fraction = state?.fraction
-        if (fraction != null) {
-            builder.setProgress(100, (fraction * 100).toInt(), false)
-        } else {
-            builder.setProgress(0, 0, true)
+
+        when {
+            download != null -> {
+                builder
+                    .setContentTitle(download.label)
+                    .setContentText(
+                        if (download.paused) {
+                            "Paused - ${download.fileName}"
+                        } else {
+                            download.fileName
+                        },
+                    )
+                val fraction = download.fraction
+                if (fraction != null) {
+                    builder.setProgress(100, (fraction * 100).toInt(), false)
+                } else {
+                    builder.setProgress(0, 0, true)
+                }
+            }
+            batch != null -> {
+                val fraction = if (batch.total > 0) {
+                    batch.finished.toFloat() / batch.total
+                } else {
+                    0f
+                }
+                builder
+                    .setContentTitle(batch.current?.let { "Updating $it" } ?: "Updating modules")
+                    .setContentText("${batch.finished} of ${batch.total} finished")
+                    .setProgress(100, (fraction * 100).toInt(), false)
+            }
+            else -> {
+                builder
+                    .setContentTitle("Preparing update")
+                    .setContentText("Starting the download")
+                    .setProgress(0, 0, true)
+            }
         }
         return builder.build()
     }

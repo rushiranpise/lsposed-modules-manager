@@ -16,6 +16,7 @@ import com.rushi.modulesmanager.data.RepoApi
 import com.rushi.modulesmanager.data.RepoRepository
 import com.rushi.modulesmanager.data.Settings
 import com.rushi.modulesmanager.data.SystemInstallSerializer
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
@@ -25,6 +26,7 @@ class AppContainer(context: Context) {
     val pendingInstalls = PendingInstalls.get(appContext)
     val systemInstallGate = SystemInstallSerializer()
     val batchState = BatchStateStore(appContext)
+    val batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
     val downloadSlots = DownloadSlots { settings.concurrentDownloads.value }
     val api = RepoApi(
         RepoApi.createClient(),

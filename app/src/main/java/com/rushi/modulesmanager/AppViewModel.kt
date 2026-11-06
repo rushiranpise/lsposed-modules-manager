@@ -253,7 +253,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _releaseTranslation = MutableStateFlow<ReleaseTranslationState?>(null)
     val releaseTranslation: StateFlow<ReleaseTranslationState?> = _releaseTranslation.asStateFlow()
 
-    private val _batchUpdate = MutableStateFlow<BatchUpdateState?>(null)
+    private val _batchUpdate = container.batchUpdate
     val batchUpdate: StateFlow<BatchUpdateState?> = _batchUpdate.asStateFlow()
 
     private val _variantChoice = MutableStateFlow<VariantChoice?>(null)
@@ -1144,7 +1144,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         waitFor: Job? = null,
     ) {
         val appContext = container.appContext
-        DownloadService.start(appContext)
         val destination = apkDestination(appContext, module, asset)
         val session = InstallSession(module, asset, destination)
         activeInstall = session
@@ -1173,6 +1172,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     phase = DownloadCenter.Phase.DOWNLOADING,
                 ),
             )
+            DownloadService.start(appContext)
             val file = container.downloadSlots.withSlot {
                 downloadApk(appContext, module, asset, destination) { done, total ->
                     container.downloads.progress(done, total)
@@ -1523,6 +1523,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 it.module.packageName to BatchItemState(it.module.displayName, BatchPhase.QUEUED)
             },
         )
+        DownloadService.start(appContext)
         batchItemJobs.clear()
         batchItemFiles.clear()
         batchJob = viewModelScope.launch {
