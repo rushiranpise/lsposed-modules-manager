@@ -23,6 +23,7 @@ import com.rushi.modulesmanager.data.DefaultSources
 import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.DownloadService
 import com.rushi.modulesmanager.data.InstalledModule
+import com.rushi.modulesmanager.data.InstalledModulesResult
 import com.rushi.modulesmanager.data.InstalledPackageVersion
 import com.rushi.modulesmanager.data.InstallerType
 import com.rushi.modulesmanager.data.LiveReleaseApi
@@ -407,10 +408,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun rescan(showMessage: Boolean = false) {
         viewModelScope.launch {
             val scanned = withContext(Dispatchers.IO) { container.scanner.scan() }
-            lastScanAt = System.currentTimeMillis()
-            detectedModules = scanned.modules
-            installedVersionMap = scanned.versions
-            _installedVersions.value = scanned.versions
+            applyScan(scanned)
             reconcilePendingInstalls()
             rebuildRepoInstalled()
             if (showMessage) message("Rescanned installed modules")
@@ -421,6 +419,45 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * on every resume. */
     fun rescanIfStale(maxAgeMs: Long = 60_000L) {
         if (System.currentTimeMillis() - lastScanAt >= maxAgeMs) rescan()
+    }
+
+    /**
+     * A delegated installer sends no broadcast when its screen is dismissed.
+     * Releasing the slot here lets the next queued install proceed; the scan
+     * then records what actually landed.
+     */
+    fun onResumed() {
+        if (reconcileAfterInstallerReturn()) return
+        rescanIfStale()
+    }
+
+    private fun reconcileAfterInstallerReturn(): Boolean {
+        val pending = container.pendingInstalls.all()
+        if (pending.isEmpty()) return false
+        val abandonPackages = pending.map { it.packageName }.toSet()
+        pending.forEach { container.systemInstallGate.markCompleted(it.packageName) }
+        viewModelScope.launch {
+            repeat(INSTALLER_RETURN_RETRIES) { attempt ->
+                val scanned = withContext(Dispatchers.IO) { container.scanner.scan() }
+                applyScan(scanned)
+                if (pending.all { it.landed(scanned.versions[it.packageName]) } ||
+                    attempt == INSTALLER_RETURN_RETRIES - 1
+                ) {
+                    reconcilePendingInstalls(abandonPackages)
+                    rebuildRepoInstalled()
+                    return@launch
+                }
+                delay(INSTALLER_RETURN_RETRY_MS)
+            }
+        }
+        return true
+    }
+
+    private fun applyScan(scanned: InstalledModulesResult) {
+        lastScanAt = System.currentTimeMillis()
+        detectedModules = scanned.modules
+        installedVersionMap = scanned.versions
+        _installedVersions.value = scanned.versions
     }
 
     /**
@@ -1142,7 +1179,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 }
             }
             container.downloads.phase(DownloadCenter.Phase.INSTALLING)
-            markPending(module, asset)
             val result = installDownloaded(appContext, file, module, announce = true)
             container.downloads.update(null)
             clearActiveInstall(session)
@@ -1153,7 +1189,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     rescan()
                     file.delete()
                 }
-                InstallResult.Delegated -> message("Opening the system installer")
+                InstallResult.Delegated -> {
+                    markPending(module, asset)
+                    message("Opening the system installer")
+                }
                 is InstallResult.Failure -> {
                     container.pendingInstalls.remove(module.packageName)
                     message(result.message)
@@ -1232,24 +1271,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         return pending
     }
 
-    /** Keeps the serial install slot busy until the external installer lands the package. */
-    private suspend fun awaitLanded(pending: PendingInstall): Boolean {
-        val deadline = System.currentTimeMillis() + DELEGATED_INSTALL_TIMEOUT_MS
-        while (System.currentTimeMillis() < deadline) {
-            val installed = withContext(Dispatchers.IO) {
-                container.scanner.installedVersion(pending.packageName)
-            }
-            if (pending.landed(installed)) return true
-            delay(1000)
-        }
-        val installed = withContext(Dispatchers.IO) {
-            container.scanner.installedVersion(pending.packageName)
-        }
-        return pending.landed(installed)
-    }
-
     /** Clears the installs that actually landed while the app was away. */
-    private fun reconcilePendingInstalls() {
+    private fun reconcilePendingInstalls(abandonPackages: Set<String> = emptySet()) {
         val pending = container.pendingInstalls.all()
         if (pending.isEmpty()) return
         val now = System.currentTimeMillis()
@@ -1260,10 +1283,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             val landed = item.landed(installed)
             when {
                 landed -> {
+                    container.systemInstallGate.markCompleted(item.packageName)
                     container.pendingInstalls.remove(item.packageName)
                     completed += item
                 }
-                now - item.startedAt > PENDING_INSTALL_TIMEOUT_MS -> {
+                item.packageName in abandonPackages ||
+                    now - item.startedAt > PENDING_INSTALL_TIMEOUT_MS -> {
+                    container.systemInstallGate.markCompleted(item.packageName)
                     container.pendingInstalls.remove(item.packageName)
                     expired += item
                 }
@@ -1346,37 +1372,51 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         module: RepoModule,
         announce: Boolean,
     ): InstallResult {
-        return when (settings.installer.value) {
-            InstallerType.SYSTEM -> if (ApkInstaller.installSystem(context, file)) {
-                InstallResult.Delegated
-            } else {
-                InstallResult.Failure("Could not open a system installer")
-            }
-            InstallerType.SESSION -> installSession(context, file, module.packageName)
-            InstallerType.SHIZUKU -> {
-                if (ShizukuInstaller.ensurePermission()) {
-                    val problem = ShizukuInstaller.install(file)
-                    if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
+        // A delegated installer can stay open indefinitely. The slot keeps the
+        // next hand-off from stacking another installer on top of it, without
+        // polling for this package inside the batch queue.
+        container.systemInstallGate.awaitFreeAndMarkPending(module.packageName)
+        var delegated = false
+        try {
+            val result = when (settings.installer.value) {
+                InstallerType.SYSTEM -> if (ApkInstaller.installSystem(context, file)) {
+                    InstallResult.Delegated
                 } else {
-                    refreshShizukuStatus()
-                    val reason = if (!ShizukuInstaller.isRunning()) {
-                        "Shizuku is not running"
+                    InstallResult.Failure("Could not open a system installer")
+                }
+                InstallerType.SESSION -> installSession(context, file, module.packageName)
+                InstallerType.SHIZUKU -> {
+                    if (ShizukuInstaller.ensurePermission()) {
+                        val problem = ShizukuInstaller.install(file)
+                        if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
                     } else {
-                        "Shizuku permission was not granted"
+                        refreshShizukuStatus()
+                        val reason = if (!ShizukuInstaller.isRunning()) {
+                            "Shizuku is not running"
+                        } else {
+                            "Shizuku permission was not granted"
+                        }
+                        if (announce) message("$reason, using the session installer")
+                        sessionFallback(context, file, module.packageName)
                     }
-                    if (announce) message("$reason, using the session installer")
-                    sessionFallback(context, file, module.packageName)
+                }
+                InstallerType.ROOT -> {
+                    if (RootInstaller.isAvailable()) {
+                        val problem = RootInstaller.install(file, context.packageName)
+                        if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
+                    } else {
+                        if (announce) message("Root access is not granted, using the session installer")
+                        sessionFallback(context, file, module.packageName)
+                    }
                 }
             }
-            InstallerType.ROOT -> {
-                if (RootInstaller.isAvailable()) {
-                    val problem = RootInstaller.install(file, context.packageName)
-                    if (problem == null) InstallResult.Success else InstallResult.Failure(problem)
-                } else {
-                    if (announce) message("Root access is not granted, using the session installer")
-                    sessionFallback(context, file, module.packageName)
-                }
-            }
+            delegated = result is InstallResult.Delegated
+            return result
+        } finally {
+            // A synchronous result is done with the slot. A delegated install keeps
+            // it until the package lands, the installer screen closes, or the gate
+            // times out.
+            if (!delegated) container.systemInstallGate.markCompleted(module.packageName)
         }
     }
 
@@ -1484,6 +1524,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         batchJob = viewModelScope.launch {
             val failures = java.util.Collections.synchronizedList(mutableListOf<String>())
             val queue = Channel<PreparedInstall>(Channel.UNLIMITED)
+            var delegatedCount = 0
             try {
                 coroutineScope {
                     val downloads = targets.map { update ->
@@ -1570,7 +1611,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 it?.copy(current = update.module.displayName)
                             }
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.INSTALLING) }
-                            val pending = markPending(update.module, prepared.asset, update.version)
                             val result = try {
                                 installDownloaded(appContext, prepared.file, update.module, announce = false)
                             } catch (e: CancellationException) {
@@ -1586,16 +1626,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                     prepared.file.delete()
                                 }
                                 InstallResult.Delegated -> {
-                                    if (awaitLanded(pending)) {
-                                        container.pendingInstalls.remove(packageName)
-                                        updateBatchItem(packageName) { it.copy(phase = BatchPhase.COMPLETED) }
-                                    } else {
-                                        container.pendingInstalls.remove(packageName)
-                                        val reason = "The installer did not confirm the install"
-                                        failures += "${update.module.displayName}: $reason"
-                                        updateBatchItem(packageName) {
-                                            it.copy(phase = BatchPhase.FAILED, error = reason)
-                                        }
+                                    // Persist the hand-off only now, while the gate is held.
+                                    // A package waiting for the gate must not look pending.
+                                    markPending(update.module, prepared.asset, update.version)
+                                    delegatedCount += 1
+                                    // The APK stays on disk until the external installer
+                                    // has read it; the pending install reconciles later.
+                                    updateBatchItem(packageName) {
+                                        it.copy(phase = BatchPhase.COMPLETED)
                                     }
                                 }
                                 is InstallResult.Failure -> {
@@ -1616,11 +1654,22 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 rescan()
                 val failed = synchronized(failures) { failures.toList() }
-                val summary = if (failed.isEmpty()) {
-                    "Updated ${targets.size} modules"
-                } else {
-                    "Updated ${targets.size - failed.size} of ${targets.size}; failed: " +
-                        failed.take(3).joinToString("; ")
+                val completed = _batchUpdate.value?.items?.values
+                    ?.count { it.phase == BatchPhase.COMPLETED }
+                    ?: 0
+                val updated = (completed - delegatedCount).coerceAtLeast(0)
+                val summary = buildString {
+                    if (updated > 0 || delegatedCount == 0) {
+                        append("Updated $updated of ${targets.size}")
+                    }
+                    if (delegatedCount > 0) {
+                        if (isNotEmpty()) append("; ")
+                        append("$delegatedCount handed to the system installer")
+                    }
+                    if (failed.isNotEmpty()) {
+                        append("; failed: ")
+                        append(failed.take(3).joinToString("; "))
+                    }
                 }
                 message(summary)
             } catch (e: CancellationException) {
@@ -1979,7 +2028,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         private const val LIVE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
         private const val PENDING_INSTALL_TIMEOUT_MS = 30 * 60 * 1000L
-        private const val DELEGATED_INSTALL_TIMEOUT_MS = 2 * 60 * 1000L
+        private const val INSTALLER_RETURN_RETRIES = 4
+        private const val INSTALLER_RETURN_RETRY_MS = 800L
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer { AppViewModel(container) }
         }

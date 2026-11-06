@@ -15,6 +15,7 @@ import com.rushi.modulesmanager.data.ReadmeApi
 import com.rushi.modulesmanager.data.RepoApi
 import com.rushi.modulesmanager.data.RepoRepository
 import com.rushi.modulesmanager.data.Settings
+import com.rushi.modulesmanager.data.SystemInstallSerializer
 
 class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
@@ -22,6 +23,7 @@ class AppContainer(context: Context) {
     val library = LibraryStore(appContext)
     val moduleState = ModuleStateStore(appContext)
     val pendingInstalls = PendingInstalls.get(appContext)
+    val systemInstallGate = SystemInstallSerializer()
     val batchState = BatchStateStore(appContext)
     val downloadSlots = DownloadSlots { settings.concurrentDownloads.value }
     val api = RepoApi(
