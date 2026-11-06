@@ -146,6 +146,7 @@ fun AppRoot(viewModel: AppViewModel) {
     val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val currentIsTab = Destination.entries.any { it.route == currentRoute }
     val showBottomBar = currentRoute != null &&
         currentRoute != "diagnostics" &&
         !currentRoute.startsWith("module/") &&
@@ -215,7 +216,13 @@ fun AppRoot(viewModel: AppViewModel) {
                                     NavigationRailItem(
                                         selected = currentRoute == destination.route,
                                         onClick = {
-                                            navController.navigateTopLevel(destination.route)
+                                            if (currentRoute?.startsWith("module/") == true) {
+                                                viewModel.closeModule()
+                                            }
+                                            navController.navigateTopLevel(
+                                                route = destination.route,
+                                                clearCurrentStack = !currentIsTab,
+                                            )
                                         },
                                         icon = { DestinationIcon(destination, installed.size) },
                                         label = { Text(destination.label) },
@@ -635,10 +642,13 @@ private fun isErrorMessage(message: String): Boolean {
         lower.contains("allow ")
 }
 
-private fun NavHostController.navigateTopLevel(route: String) {
+private fun NavHostController.navigateTopLevel(
+    route: String,
+    clearCurrentStack: Boolean = false,
+) {
     navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(graph.findStartDestination().id) { saveState = !clearCurrentStack }
         launchSingleTop = true
-        restoreState = true
+        restoreState = !clearCurrentStack
     }
 }
