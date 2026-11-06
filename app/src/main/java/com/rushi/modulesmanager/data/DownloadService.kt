@@ -189,6 +189,13 @@ class DownloadService : Service() {
                         builder.setProgress(100, (fraction * 100).toInt(), false)
                     else -> builder.setProgress(0, 0, true)
                 }
+                if (save.phase != ApkSaveCenter.State.Phase.SAVING) {
+                    builder.addAction(
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Cancel",
+                        cancelSavePendingIntent(),
+                    )
+                }
             }
             download != null -> {
                 builder
@@ -228,9 +235,17 @@ class DownloadService : Service() {
         return builder.build()
     }
 
+    private fun cancelSavePendingIntent(): PendingIntent = PendingIntent.getService(
+        this,
+        REQUEST_CANCEL_SAVE,
+        Intent(this, DownloadService::class.java).setAction(ACTION_CANCEL_SAVE),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     companion object {
         private const val CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 42
+        private const val REQUEST_CANCEL_SAVE = 1
         private const val ACTION_SAVE = "com.rushi.modulesmanager.action.SAVE_APK"
         private const val ACTION_CANCEL_SAVE = "com.rushi.modulesmanager.action.CANCEL_SAVE_APK"
 
