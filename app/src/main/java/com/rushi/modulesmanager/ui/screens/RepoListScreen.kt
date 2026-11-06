@@ -176,7 +176,10 @@ fun RepoListScreen(
     // update time is worth announcing on launch and after a refresh.
     var lastDataStamp by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
-    LaunchedEffect(dataUpdatedAt) {
+    LaunchedEffect(dataUpdatedAt, refreshing) {
+        // The cached timestamp is published before the network refresh. Wait for it
+        // to settle so a cold start announces only the current index time.
+        if (refreshing) return@LaunchedEffect
         val stamp = dataUpdatedAt ?: return@LaunchedEffect
         val previous = lastDataStamp
         if (previous != null && stamp != previous) {
