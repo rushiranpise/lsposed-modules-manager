@@ -16,6 +16,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rushi.modulesmanager.data.ApkInspector
 import com.rushi.modulesmanager.data.ApkInstaller
+import com.rushi.modulesmanager.data.ApkSaveCenter
 import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.AppStorage
 import com.rushi.modulesmanager.data.AppTheme
@@ -217,6 +218,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val lastUpdated: StateFlow<Long?> = container.repo.lastUpdated
     val dataUpdatedAt: StateFlow<Long?> = container.repo.updatedAt
     val downloads: StateFlow<DownloadCenter.State?> = container.downloads.state
+    val apkSave: StateFlow<ApkSaveCenter.State?> = container.apkSaveCenter.state
 
     private val _repoInstalled = MutableStateFlow<List<InstalledModule>>(emptyList())
     val repoInstalled: StateFlow<List<InstalledModule>> = _repoInstalled.asStateFlow()
@@ -271,7 +273,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var downloadJob: Job? = null
     private var activeInstall: InstallSession? = null
     private var batchJob: Job? = null
-    private var saveJob: Job? = null
     private var batchPersisting = false
     private val batchItemJobs = mutableMapOf<String, Job>()
     private val batchItemFiles = mutableMapOf<String, File>()
@@ -352,6 +353,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         restoreBatch()
+        viewModelScope.launch {
+            container.apkSaveCenter.messages.collect { message(it) }
+        }
         viewModelScope.launch {
             _batchUpdate.collect { state ->
                 if (batchPersisting && state?.running == true) container.batchState.save(state)
@@ -610,44 +614,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             message("Saving APKs requires Android 10 or newer")
             return
         }
-        if (saveJob?.isActive == true) {
+        if (apkSave.value != null) {
             message("Wait for the current save to finish")
             return
         }
-        if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
+        if (downloads.value != null ||
+            downloadJob?.isActive == true ||
+            batchJob?.isActive == true ||
+            startingUpdates.isNotEmpty()
+        ) {
             message("Wait for the current install to finish")
             return
         }
         val context = container.appContext
-        saveJob = viewModelScope.launch {
-            val destination = apkExportDestination(context, module, asset)
-            message("Saving ${module.displayName}...")
-            try {
-                val file = container.downloadSlots.withSlot {
-                    downloadApk(
-                        context = context,
-                        module = module,
-                        asset = asset,
-                        destination = destination,
-                        rejectOlderThanInstalled = false,
-                    ) { _, _ -> }
-                }
-                val saved = container.apkExportStore.export(file, exportedApkName(asset))
-                message(
-                    if (saved) {
-                        "Saved to Download/ModulesManager"
-                    } else {
-                        "Could not save ${module.displayName}"
-                    },
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                message(e.userMessage())
-            } finally {
-                destination.delete()
-                File(destination.path + ".part").delete()
-            }
+        val request = ApkSaveCenter.Request(
+            packageName = module.packageName,
+            label = module.displayName,
+            downloadUrl = asset.downloadUrl,
+            originalDownloadUrl = asset.originalDownloadUrl,
+            size = asset.size,
+            exportName = exportedApkName(asset),
+            destination = apkExportDestination(context, module, asset),
+        )
+        if (!container.apkSaveCenter.begin(request)) {
+            message("Wait for the current save to finish")
+            return
+        }
+        if (!DownloadService.startSave(context)) {
+            container.apkSaveCenter.finish("Could not start the save service")
         }
     }
 
@@ -1183,6 +1177,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             module.packageName in preReleaseModules.value
 
     fun install(module: RepoModule, asset: RepoAsset) {
+        if (apkSave.value != null) {
+            message("Wait for the current save to finish")
+            return
+        }
         if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
             message("Wait for the current install to finish")
             return
@@ -1413,21 +1411,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             destination = destination,
             onProgress = onProgress,
         )
-        val info = withContext(Dispatchers.IO) { ApkInspector.inspect(context, file) }
-            ?: throw IllegalStateException("The downloaded file is not a valid APK")
-        if (info.packageName != module.packageName) {
-            throw IllegalStateException("This release contains ${info.packageName}, not ${module.packageName}")
-        }
-        if (info.minSdk > 0 && info.minSdk > Build.VERSION.SDK_INT) {
-            throw IllegalStateException(
-                "This APK needs Android API ${info.minSdk}, this device runs API ${Build.VERSION.SDK_INT}",
-            )
-        }
-        if (info.abis.isNotEmpty() && info.abis.none { it in Build.SUPPORTED_ABIS }) {
-            throw IllegalStateException(
-                "This APK is built for ${info.abis.joinToString()}, which this device cannot run",
-            )
-        }
+        val info = ApkInspector.validateDownloaded(context, file, module.packageName)
         if (rejectOlderThanInstalled) {
             val installedPackage = _installedVersions.value[module.packageName]
             if (installedPackage != null && info.versionCode < installedPackage.versionCode) {
@@ -1570,6 +1554,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * the install queue, because installing it can kill this process.
      */
     fun updateAll() {
+        if (apkSave.value != null) {
+            message("Wait for the current save to finish")
+            return
+        }
         if (batchJob?.isActive == true || downloadJob?.isActive == true) return
         val available = updates.value
         if (available.isEmpty()) {
@@ -1829,6 +1817,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun installLatest(module: RepoModule) {
         val packageName = module.packageName
         if (packageName in startingUpdates) return
+        if (apkSave.value != null) {
+            message("Wait for the current save to finish")
+            return
+        }
         if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
             message("Wait for the current install to finish")
             return
@@ -1914,6 +1906,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         activeInstall = null
         downloadJob?.cancel()
         container.downloads.update(null)
+    }
+
+    fun cancelSave() {
+        DownloadService.cancelSave(container.appContext)
     }
 
     fun cachedTranslation(module: RepoModule): String? = settings.cachedTranslation(

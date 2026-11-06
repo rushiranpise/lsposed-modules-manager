@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import com.rushi.modulesmanager.data.AndroidNetworkMonitor
 import com.rushi.modulesmanager.data.ApkExportStore
+import com.rushi.modulesmanager.data.ApkSaveCenter
 import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.DownloadRetry
 import com.rushi.modulesmanager.data.DownloadSlots
@@ -38,6 +39,7 @@ class AppContainer(context: Context) {
     val repo = RepoRepository(appContext, api, moduleState)
     val scanner = InstalledModuleScanner(appContext)
     val downloads = DownloadCenter()
+    val apkSaveCenter = ApkSaveCenter()
     val apkExportStore = ApkExportStore(appContext)
 }
 

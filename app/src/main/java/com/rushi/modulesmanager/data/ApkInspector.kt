@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import java.io.File
 import java.util.zip.ZipFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object ApkInspector {
 
@@ -49,6 +51,32 @@ object ApkInspector {
                 info.providers?.any { it.name == XPOSED_PROVIDER } == true ||
                 hasModuleProp(file),
         )
+    }
+
+    /** Rejects a downloaded file that is not the expected, runnable APK. */
+    suspend fun validateDownloaded(
+        context: Context,
+        file: File,
+        expectedPackage: String,
+    ): ApkInfo {
+        val info = withContext(Dispatchers.IO) { inspect(context, file) }
+            ?: throw IllegalStateException("The downloaded file is not a valid APK")
+        if (info.packageName != expectedPackage) {
+            throw IllegalStateException(
+                "This release contains ${info.packageName}, not $expectedPackage",
+            )
+        }
+        if (info.minSdk > 0 && info.minSdk > Build.VERSION.SDK_INT) {
+            throw IllegalStateException(
+                "This APK needs Android API ${info.minSdk}, this device runs API ${Build.VERSION.SDK_INT}",
+            )
+        }
+        if (info.abis.isNotEmpty() && info.abis.none { it in Build.SUPPORTED_ABIS }) {
+            throw IllegalStateException(
+                "This APK is built for ${info.abis.joinToString()}, which this device cannot run",
+            )
+        }
+        return info
     }
 
     private fun readAbis(file: File): Set<String> = runCatching {

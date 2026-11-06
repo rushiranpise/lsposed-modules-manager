@@ -56,6 +56,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.rushi.modulesmanager.BatchPhase
 import com.rushi.modulesmanager.BatchUpdateState
+import com.rushi.modulesmanager.data.ApkSaveCenter
 import com.rushi.modulesmanager.data.DownloadCenter
 import com.rushi.modulesmanager.data.InstalledModule
 import com.rushi.modulesmanager.data.RepoModule
@@ -463,6 +464,92 @@ fun DownloadBanner(
             } else {
                 LinearProgressIndicator(
                     progress = { if (state.phase == DownloadCenter.Phase.DOWNLOADING) fraction ?: 0f else 1f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SaveBanner(
+    state: ApkSaveCenter.State,
+    onCancel: () -> Unit,
+) {
+    val amoled = LocalAmoled.current
+    Surface(
+        color = if (amoled) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = if (amoled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
+        tonalElevation = 3.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (state.phase == ApkSaveCenter.State.Phase.SAVING) {
+                        Icons.Outlined.Verified
+                    } else {
+                        Icons.Outlined.Download
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.size(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Saving ${state.label}",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = when (state.phase) {
+                            ApkSaveCenter.State.Phase.PREPARING -> "Preparing download..."
+                            ApkSaveCenter.State.Phase.DOWNLOADING -> {
+                                val total = if (state.total > 0) {
+                                    formatBytes(state.total)
+                                } else {
+                                    "unknown size"
+                                }
+                                "${formatBytes(state.downloaded)} of $total - Download/ModulesManager"
+                            }
+                            ApkSaveCenter.State.Phase.SAVING ->
+                                "Copying to Download/ModulesManager..."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (state.phase != ApkSaveCenter.State.Phase.SAVING) {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Cancel save")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            val fraction = state.fraction
+            if (state.phase == ApkSaveCenter.State.Phase.DOWNLOADING && fraction != null) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                )
+            } else {
+                LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)

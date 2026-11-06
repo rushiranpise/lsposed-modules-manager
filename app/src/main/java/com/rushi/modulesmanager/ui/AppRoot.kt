@@ -92,6 +92,7 @@ import com.rushi.modulesmanager.data.ApkVariants
 import com.rushi.modulesmanager.data.formatBytes
 import com.rushi.modulesmanager.ui.components.BatchUpdateBanner
 import com.rushi.modulesmanager.ui.components.DownloadBanner
+import com.rushi.modulesmanager.ui.components.SaveBanner
 import com.rushi.modulesmanager.ui.screens.DeveloperScreen
 import com.rushi.modulesmanager.ui.screens.DiagnosticsScreen
 import com.rushi.modulesmanager.ui.screens.InstalledScreen
@@ -135,10 +136,11 @@ fun AppRoot(viewModel: AppViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val download by viewModel.downloads.collectAsStateWithLifecycle()
+    val save by viewModel.apkSave.collectAsStateWithLifecycle()
     val batch by viewModel.batchUpdate.collectAsStateWithLifecycle()
     val activeBatch = batch?.takeIf { it.running || it.interrupted }
     RequestNotificationPermissionOnDownload(
-        downloading = download != null || batch?.running == true,
+        downloading = download != null || save != null || batch?.running == true,
     )
     val installed by viewModel.allInstalled.collectAsStateWithLifecycle()
     val variantChoice by viewModel.variantChoice.collectAsStateWithLifecycle()
@@ -201,6 +203,9 @@ fun AppRoot(viewModel: AppViewModel) {
                             onResume = viewModel::resumeDownload,
                         )
                     }
+                    save?.let { state ->
+                        SaveBanner(state = state, onCancel = viewModel::cancelSave)
+                    }
                     Row(modifier = Modifier.weight(1f)) {
                         // Keep the rail beside module and developer pages; only diagnostics
                         // takes the full window.
@@ -259,6 +264,11 @@ fun AppRoot(viewModel: AppViewModel) {
                                 )
                             }
                         }
+                        save?.let { state ->
+                            Box(modifier = Modifier.navigationBarsPadding()) {
+                                SaveBanner(state = state, onCancel = viewModel::cancelSave)
+                            }
+                        }
                     } else {
                         activeBatch?.let { state ->
                             BatchUpdateBanner(
@@ -274,6 +284,9 @@ fun AppRoot(viewModel: AppViewModel) {
                                 onPause = viewModel::pauseDownload,
                                 onResume = viewModel::resumeDownload,
                             )
+                        }
+                        save?.let { state ->
+                            SaveBanner(state = state, onCancel = viewModel::cancelSave)
                         }
                         FloatingNavBar(
                             currentRoute = currentRoute,
