@@ -41,6 +41,7 @@ import com.rushi.modulesmanager.data.SourceAlternative
 import com.rushi.modulesmanager.data.TranslateApi
 import com.rushi.modulesmanager.data.TranslationLanguages
 import com.rushi.modulesmanager.data.UpdateChannel
+import com.rushi.modulesmanager.data.exportedApkName
 import com.rushi.modulesmanager.data.preferredAsset
 import com.rushi.modulesmanager.data.stripHtml
 import com.rushi.modulesmanager.data.userMessage
@@ -270,6 +271,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private var downloadJob: Job? = null
     private var activeInstall: InstallSession? = null
     private var batchJob: Job? = null
+    private var saveJob: Job? = null
     private var batchPersisting = false
     private val batchItemJobs = mutableMapOf<String, Job>()
     private val batchItemFiles = mutableMapOf<String, File>()
@@ -585,6 +587,62 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 AppStorage.clearDownloadedApks(container.appContext)
             }
             message("Downloaded APKs cleared")
+        }
+    }
+
+    suspend fun exportedApkBytes(): Long = container.apkExportStore.exportedBytes()
+
+    fun clearExportedApks() {
+        viewModelScope.launch {
+            container.apkExportStore.deleteAll()
+            message("Exported APKs deleted")
+        }
+    }
+
+    /** Saves the chosen APK to public Downloads on Android 10+, without installing it. */
+    fun saveApk(module: RepoModule, asset: RepoAsset) {
+        if (!container.apkExportStore.isSupported) {
+            message("Saving APKs requires Android 10 or newer")
+            return
+        }
+        if (saveJob?.isActive == true) {
+            message("Wait for the current save to finish")
+            return
+        }
+        if (downloads.value != null || downloadJob?.isActive == true || batchJob?.isActive == true) {
+            message("Wait for the current install to finish")
+            return
+        }
+        val context = container.appContext
+        saveJob = viewModelScope.launch {
+            val destination = apkExportDestination(context, module, asset)
+            message("Saving ${module.displayName}...")
+            try {
+                val file = container.downloadSlots.withSlot {
+                    downloadApk(
+                        context = context,
+                        module = module,
+                        asset = asset,
+                        destination = destination,
+                        rejectOlderThanInstalled = false,
+                    ) { _, _ -> }
+                }
+                val saved = container.apkExportStore.export(file, exportedApkName(asset))
+                message(
+                    if (saved) {
+                        "Saved to Download/ModulesManager"
+                    } else {
+                        "Could not save ${module.displayName}"
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message(e.userMessage())
+            } finally {
+                destination.delete()
+                File(destination.path + ".part").delete()
+            }
         }
     }
 
@@ -1331,12 +1389,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             .apply { mkdirs() }
             .resolve("${module.packageName}-${asset.name}".sanitizeFileName())
 
+    private fun apkExportDestination(context: Context, module: RepoModule, asset: RepoAsset): File =
+        File(context.cacheDir, "apk-export")
+            .apply { mkdirs() }
+            .resolve("${module.packageName}-${asset.name}".sanitizeFileName())
+
     /** Downloads and validates one APK. Shared by single installs and the update queue. */
     private suspend fun downloadApk(
         context: Context,
         module: RepoModule,
         asset: RepoAsset,
         destination: File,
+        rejectOlderThanInstalled: Boolean = true,
         onProgress: (downloaded: Long, total: Long) -> Unit,
     ): File {
         val file = container.api.download(
@@ -1359,9 +1423,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 "This APK is built for ${info.abis.joinToString()}, which this device cannot run",
             )
         }
-        val installedPackage = _installedVersions.value[module.packageName]
-        if (installedPackage != null && info.versionCode < installedPackage.versionCode) {
-            throw IllegalStateException("This release is older than the installed version")
+        if (rejectOlderThanInstalled) {
+            val installedPackage = _installedVersions.value[module.packageName]
+            if (installedPackage != null && info.versionCode < installedPackage.versionCode) {
+                throw IllegalStateException("This release is older than the installed version")
+            }
         }
         return file
     }

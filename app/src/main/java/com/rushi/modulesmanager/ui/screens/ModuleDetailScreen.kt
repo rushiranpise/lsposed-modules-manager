@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color as AndroidColor
+import android.os.Build
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -380,6 +381,9 @@ fun ModuleDetailScreen(
                         },
                         onInstall = { asset ->
                             viewModel.installChosen(module, asset)
+                        },
+                        onSave = { asset ->
+                            viewModel.saveApk(module, asset)
                         },
                         onOpenRelease = viewModel::openLink,
                     )
@@ -805,6 +809,7 @@ private fun ReleasesTab(
     loading: Boolean,
     translations: Map<String, String>,
     onInstall: (RepoAsset) -> Unit,
+    onSave: (RepoAsset) -> Unit,
     onOpenRelease: (String?) -> Unit,
 ) {
     val releases = module.allReleases()
@@ -829,7 +834,9 @@ private fun ReleasesTab(
             ReleaseCard(
                 release = item,
                 translations = translations,
+                canSave = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
                 onInstall = onInstall,
+                onSave = onSave,
                 onOpenRelease = { onOpenRelease(item.url) },
             )
         }
@@ -840,7 +847,9 @@ private fun ReleasesTab(
 private fun ReleaseCard(
     release: RepoRelease,
     translations: Map<String, String>,
+    canSave: Boolean,
     onInstall: (RepoAsset) -> Unit,
+    onSave: (RepoAsset) -> Unit,
     onOpenRelease: () -> Unit,
 ) {
     Card(
@@ -923,7 +932,12 @@ private fun ReleaseCard(
             if (release.apkAssets.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 release.apkAssets.forEach { asset ->
-                    AssetRow(asset = asset, onInstall = { onInstall(asset) })
+                    AssetRow(
+                        asset = asset,
+                        canSave = canSave,
+                        onInstall = { onInstall(asset) },
+                        onSave = { onSave(asset) },
+                    )
                 }
             } else {
                 Spacer(Modifier.height(6.dp))
@@ -945,7 +959,12 @@ private val HTML_TAG = Regex(
 private fun looksLikeHtml(value: String): Boolean = HTML_TAG.containsMatchIn(value)
 
 @Composable
-private fun AssetRow(asset: RepoAsset, onInstall: () -> Unit) {
+private fun AssetRow(
+    asset: RepoAsset,
+    canSave: Boolean,
+    onInstall: () -> Unit,
+    onSave: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -972,6 +991,15 @@ private fun AssetRow(asset: RepoAsset, onInstall: () -> Unit) {
             }
         }
         Spacer(Modifier.width(8.dp))
+        if (canSave) {
+            TextButton(
+                onClick = onSave,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Text("Save")
+            }
+            Spacer(Modifier.width(2.dp))
+        }
         FilledTonalButton(onClick = onInstall) {
             Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))

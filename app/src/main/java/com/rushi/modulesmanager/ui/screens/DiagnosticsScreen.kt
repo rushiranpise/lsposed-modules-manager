@@ -65,6 +65,7 @@ private data class StorageStats(
     val index: Long = 0L,
     val readme: Long = 0L,
     val apks: Long = 0L,
+    val exported: Long = 0L,
 )
 
 @Composable
@@ -85,6 +86,11 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 index = AppStorage.indexCacheSize(context),
                 readme = AppStorage.readmeCacheSize(context),
                 apks = AppStorage.downloadedApkSize(context),
+                exported = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    viewModel.exportedApkBytes()
+                } else {
+                    0L
+                },
             )
         }
     }
@@ -100,6 +106,9 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         appendLine("Updates available: ${updates.size}")
         appendLine("Index and README cache: ${formatStorage(stats.index + stats.readme)}")
         appendLine("Downloaded APKs: ${formatStorage(stats.apks)}")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appendLine("Exported APKs: ${formatStorage(stats.exported)}")
+        }
     }.trimEnd()
 
     fun refreshStorage() {
@@ -210,9 +219,19 @@ fun DiagnosticsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                     refreshStorage()
                 },
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                StorageRow(
+                    title = "Exported APKs",
+                    detail = formatStorage(stats.exported),
+                    onClear = {
+                        viewModel.clearExportedApks()
+                        refreshStorage()
+                    },
+                )
+            }
 
             Text(
-                text = "The index cache is fetched again after clearing. Downloaded APKs are only needed until the installer finishes.",
+                text = "The index cache is fetched again after clearing. Downloaded APKs are only needed until the installer finishes. Exported APKs are saved in Download/ModulesManager.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
