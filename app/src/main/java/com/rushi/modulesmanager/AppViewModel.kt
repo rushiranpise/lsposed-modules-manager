@@ -1493,7 +1493,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.batchState.clear()
     }
 
-    /** Downloads several updates in parallel, then installs them one at a time. */
+    /**
+     * Downloads several updates in parallel, then installs them one at a time.
+     * The manager's own update is deferred until every other APK has entered
+     * the install queue, because installing it can kill this process.
+     */
     fun updateAll() {
         if (batchJob?.isActive == true || downloadJob?.isActive == true) return
         val targets = updates.value
@@ -1527,7 +1531,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             var delegatedCount = 0
             try {
                 coroutineScope {
-                    val downloads = targets.map { update ->
+                    fun startDownload(update: ModuleUpdate): Job {
                         val packageName = update.module.packageName
                         val job = launch {
                             updateBatchItem(packageName) { it.copy(phase = BatchPhase.DOWNLOADING) }
@@ -1595,7 +1599,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                             }
                         }
                         batchItemJobs[packageName] = job
-                        job
+                        return job
                     }
 
                     val installer = launch {
@@ -1648,7 +1652,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         }
                     }
 
-                    downloads.joinAll()
+                    val selfPackage = appContext.packageName
+                    val (lastTargets, regularTargets) = targets.partition { update ->
+                        update.module.packageName == selfPackage ||
+                            update.installed.packageName == selfPackage
+                    }
+                    regularTargets.map { startDownload(it) }.joinAll()
+                    // Start the deferred downloads only after every regular APK is
+                    // queued. Their FIFO position is then behind all other installs.
+                    lastTargets.map { startDownload(it) }.joinAll()
                     queue.close()
                     installer.join()
                 }
