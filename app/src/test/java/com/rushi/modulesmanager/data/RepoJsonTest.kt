@@ -17,14 +17,25 @@ class RepoJsonTest {
     }
 
     @Test
-    fun `keeps every repository the index lists for a package`() {
+    fun `keeps every repository the index lists for a package including mirrors`() {
         val alternatives = RepoJson.parseSourceAlternatives(DUPLICATES)
 
         val repos = alternatives["com.example.dup"].orEmpty().map { it.repo }
 
-        assertEquals(listOf("fork/two", "fork/one"), repos)
-        assertFalse(repos.any { it.startsWith("Xposed-Modules-Repo/") })
+        assertEquals(3, repos.size)
+        assertTrue(repos.containsAll(listOf("fork/two", "fork/one", "Xposed-Modules-Repo/com.example.dup")))
         assertEquals(1, RepoJson.parseRepos(DUPLICATES).size)
+    }
+
+    @Test
+    fun `counts a source repository and its mirror as two sources`() {
+        val alternatives = RepoJson.parseSourceAlternatives(SOURCE_AND_MIRROR)
+
+        val repos = alternatives["com.wmods.wppenhacer"].orEmpty().map { it.repo }
+
+        assertEquals(2, repos.size)
+        assertTrue(repos.contains("Dev4Mod/WaEnhancer"))
+        assertTrue(repos.contains("Xposed-Modules-Repo/com.wmods.wppenhacer"))
     }
 
     @Test
@@ -36,6 +47,23 @@ class RepoJsonTest {
     }
 
     private companion object {
+        val SOURCE_AND_MIRROR = """
+            [
+              {
+                "full_name": "Dev4Mod/WaEnhancer",
+                "html_url": "https://github.com/Dev4Mod/WaEnhancer",
+                "org_repo": "Xposed-Modules-Repo/com.wmods.wppenhacer",
+                "package": "com.wmods.wppenhacer",
+                "release": {
+                  "tag": "1.6.3-ceca486e",
+                  "published_at": "2026-11-06T23:34:31Z",
+                  "html_url": "https://github.com/Dev4Mod/WaEnhancer/releases/tag/1.6.3-ceca486e",
+                  "apk_url": "https://github.com/Dev4Mod/WaEnhancer/releases/download/1.6.3-ceca486e/WaEnhancer-1.6.3.CECA486E.apk"
+                }
+              }
+            ]
+        """.trimIndent()
+
         val API_METADATA = """
             [
               {

@@ -432,8 +432,8 @@ object RepoJson {
 
     /**
      * Repositories the index lists for each package. The parser keeps only one module per
-     * package, but the raw file can list a mirror and one or more forks; this keeps them so
-     * the source dialog can offer a choice instead of making the user type a slug.
+     * package, but the raw file can list a source, a mirror and one or more forks; this keeps
+     * all of them so the source chip and dialog can offer every repository in the index.
      */
     fun parseSourceAlternatives(json: String): Map<String, List<SourceAlternative>> = runCatching {
         val array = JSONArray(json)
@@ -453,6 +453,7 @@ object RepoJson {
                 githubRepo(obj.optString("full_name"))?.let(::add)
                 githubRepo(obj.optString("source_url"))?.let(::add)
                 githubRepo(obj.optString("html_url"))?.let(::add)
+                githubRepo(obj.optString("org_repo"))?.let(::add)
             }.distinct()
             val bucket = byPackage.getOrPut(packageName) { LinkedHashMap() }
             repos.forEach { repo ->
@@ -482,7 +483,6 @@ object RepoJson {
         val owner = match.groupValues[1].removeSuffix(".git")
         val repo = match.groupValues[2].removeSuffix(".git")
         if (owner.isBlank() || repo.isBlank()) return null
-        if (owner.equals("Xposed-Modules-Repo", ignoreCase = true)) return null
         return "$owner/$repo"
     }
 
