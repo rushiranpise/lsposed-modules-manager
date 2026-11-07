@@ -668,19 +668,36 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         semaphore.withPermit {
                             val module = repoModules[item.packageName] ?: return@withPermit
                             try {
-                                var live: LiveReleaseApi.LiveRelease? = null
+                                // A source and its mirror can be updated at different times, so
+                                // compare every repository instead of taking the first response.
+                                var newestLive: LiveReleaseApi.LiveRelease? = null
+                                var newestVersion: ModuleVersion? = null
                                 for (repo in module.liveReleaseRepos()) {
                                     val attempt = runCatching {
                                         container.liveApi.fetchLatest(repo)
                                     }
-                                    live = attempt.getOrNull()
-                                    if (live != null) break
+                                    val found = attempt.getOrNull()
+                                    val foundVersion = ModuleVersion.parse(found?.tag)
+                                    if (found != null && foundVersion != null) {
+                                        val previous = newestLive
+                                        val previousVersion = newestVersion
+                                        if (previous == null || previousVersion == null ||
+                                            foundVersion.isNewerThan(
+                                                previousVersion,
+                                                previous.publishedAt,
+                                                found.publishedAt,
+                                            )
+                                        ) {
+                                            newestLive = found
+                                            newestVersion = foundVersion
+                                        }
+                                    }
                                     if (attempt.exceptionOrNull() is LiveUpdateRateLimitException) {
                                         throw LiveUpdateRateLimitException()
                                     }
                                 }
-                                val latestLive = live ?: return@withPermit
-                                val liveVersion = ModuleVersion.parse(latestLive.tag) ?: return@withPermit
+                                val latestLive = newestLive ?: return@withPermit
+                                val liveVersion = newestVersion ?: return@withPermit
                                 val dailyVersion = ModuleVersion.parse(module.latestRelease)
                                 if (dailyVersion != null &&
                                     !liveVersion.isNewerThan(
