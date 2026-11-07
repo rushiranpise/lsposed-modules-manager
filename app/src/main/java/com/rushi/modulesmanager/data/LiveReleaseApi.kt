@@ -45,6 +45,10 @@ class LiveReleaseApi(
     /** ETag per repository, so unchanged releases return 304 and do not consume the rate limit. */
     private val etags = ConcurrentHashMap<String, String>()
 
+    /** The last successful responses, returned when GitHub answers an ETag with 304. */
+    private val latestCache = ConcurrentHashMap<String, LiveRelease>()
+    private val allCache = ConcurrentHashMap<String, List<LiveRelease>>()
+
     /** GitHub stars and forks for a repository, with an HTML fallback when the API is limited. */
     suspend fun fetchStats(repoFullName: String): RepoStats? = withContext(Dispatchers.IO) {
         apiStats(repoFullName) ?: htmlStats(repoFullName)
@@ -106,8 +110,11 @@ class LiveReleaseApi(
 
         client.newCall(request).execute().use { response ->
             when {
-                response.code == 304 -> return@withContext null
-                response.code == 404 -> return@withContext null
+                response.code == 304 -> return@withContext latestCache[repoFullName]
+                response.code == 404 -> {
+                    latestCache.remove(repoFullName)
+                    return@withContext null
+                }
                 response.code == 403 || response.code == 429 -> throw LiveUpdateRateLimitException()
                 !response.isSuccessful -> throw IOException("HTTP ${response.code}")
             }
@@ -119,7 +126,7 @@ class LiveReleaseApi(
             val assets = parseAssets(obj)
             if (assets.isEmpty()) return@withContext null
 
-            LiveRelease(
+            val release = LiveRelease(
                 tag = tag,
                 name = obj.optString("name").takeIf { it.isNotBlank() && it != "null" },
                 publishedAt = obj.optString("published_at").takeIf { it.isNotBlank() && it != "null" },
@@ -128,13 +135,15 @@ class LiveReleaseApi(
                 description = obj.optString("body").takeIf { it.isNotBlank() && it != "null" },
                 assets = assets,
             )
+            latestCache[repoFullName] = release
+            release
         }
     }
 
     /**
      * Every published release, newest first, including pre-releases. The daily index only keeps
      * the newest release per channel, so the detail screen needs this to list release history.
-     * Returns null when the ETag matched and the caller should keep what it already shows.
+     * Returns the last successful response when an ETag matches, or null if no cached copy exists.
      */
     suspend fun fetchAll(
         repoFullName: String,
@@ -161,8 +170,11 @@ class LiveReleaseApi(
 
         client.newCall(request).execute().use { response ->
             when {
-                response.code == 304 -> return@withContext null
-                response.code == 404 -> return@withContext emptyList()
+                response.code == 304 -> return@withContext allCache[cacheKey]
+                response.code == 404 -> {
+                    allCache.remove(cacheKey)
+                    return@withContext emptyList()
+                }
                 response.code == 403 || response.code == 429 -> throw LiveUpdateRateLimitException()
                 !response.isSuccessful -> throw IOException("HTTP ${response.code}")
             }
@@ -170,7 +182,7 @@ class LiveReleaseApi(
 
             val body = response.body?.string() ?: return@withContext emptyList()
             val array = runCatching { JSONArray(body) }.getOrNull() ?: return@withContext emptyList()
-            buildList {
+            val releases = buildList {
                 for (index in 0 until array.length()) {
                     val obj = array.optJSONObject(index) ?: continue
                     if (obj.optBoolean("draft", false)) continue
@@ -191,6 +203,8 @@ class LiveReleaseApi(
                     )
                 }
             }
+            allCache[cacheKey] = releases
+            releases
         }
     }
 

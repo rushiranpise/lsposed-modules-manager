@@ -50,6 +50,79 @@ class RepoModuleTest {
         assertEquals(true, releases.first().isPrerelease)
     }
 
+    @Test
+    fun `live release lookup prefers the source repository over the mirror`() {
+        val module = module(
+            sourceUrl = "https://github.com/Dev4Mod/WaEnhancer",
+            repoFullName = "Xposed-Modules-Repo/com.wmods.wppenhacer",
+        )
+
+        assertEquals(
+            listOf(
+                "Dev4Mod/WaEnhancer",
+                "Xposed-Modules-Repo/com.wmods.wppenhacer",
+            ),
+            module.liveReleaseRepos(),
+        )
+    }
+
+    @Test
+    fun `a newer release in the history replaces the index release`() {
+        val indexed = release("1.6.1-f4a8da1e", "2026-10-18T17:53:19Z", prerelease = false)
+        val current = release("1.6.3-ceca486e", "2026-11-06T23:34:31Z", prerelease = false)
+        val module = module(
+            latestRelease = indexed.tagName,
+            latestReleaseTime = indexed.publishedAt,
+            releases = listOf(indexed),
+        )
+
+        val updated = module.withReleaseHistory(listOf(current))
+
+        assertEquals("1.6.3-ceca486e", updated.latestRelease)
+        assertEquals("2026-11-06T23:34:31Z", updated.latestReleaseTime)
+        assertEquals(listOf("1.6.3-ceca486e", "1.6.1-f4a8da1e"), updated.releases.map { it.tagName })
+    }
+
+    @Test
+    fun `a hash-suffixed tag matches the plain installed version`() {
+        val release = release("1.6.3-ceca486e", "2026-11-06T23:34:31Z", prerelease = false)
+        val version = ModuleVersion.parse("1.6.3")!!
+
+        assertEquals(true, release.matchesVersion(version))
+    }
+
+    private fun module(
+        latestRelease: String? = null,
+        latestReleaseTime: String? = null,
+        releases: List<RepoRelease> = emptyList(),
+        repoFullName: String? = null,
+        sourceUrl: String? = null,
+    ) = RepoModule(
+        packageName = "com.wmods.wppenhacer",
+        displayName = "Wa Enhancer",
+        summary = null,
+        url = null,
+        homepageUrl = null,
+        sourceUrl = sourceUrl,
+        latestRelease = latestRelease,
+        latestReleaseTime = latestReleaseTime,
+        latestBetaRelease = null,
+        latestBetaReleaseTime = null,
+        latestSnapshotRelease = null,
+        latestSnapshotReleaseTime = null,
+        releases = releases,
+        betaReleases = emptyList(),
+        snapshotReleases = emptyList(),
+        readme = null,
+        readmeHtml = null,
+        collaborators = emptyList(),
+        scope = emptyList(),
+        hide = false,
+        updatedAt = null,
+        stargazerCount = 0,
+        repoFullName = repoFullName,
+    )
+
     private fun release(tag: String, date: String, prerelease: Boolean) = RepoRelease(
         name = tag,
         tagName = tag,
@@ -57,6 +130,14 @@ class RepoModuleTest {
         descriptionHtml = null,
         publishedAt = date,
         isPrerelease = prerelease,
-        assets = emptyList(),
+        assets = listOf(
+            RepoAsset(
+                name = "$tag.apk",
+                contentType = "application/vnd.android.package-archive",
+                downloadUrl = "https://github.com/example/module/releases/download/$tag/module.apk",
+                downloadCount = 0,
+                size = 1L,
+            ),
+        ),
     )
 }

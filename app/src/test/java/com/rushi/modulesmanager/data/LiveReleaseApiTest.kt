@@ -176,7 +176,55 @@ class LiveReleaseApiTest {
         )
     }
 
+    @Test
+    fun `reuses the cached latest release when the etag matches`() = runBlocking {
+        server.enqueue(MockResponse().setBody(LATEST_RELEASE).addHeader("ETag", "\"latest-v1\""))
+        server.enqueue(MockResponse().setResponseCode(304))
+        val api = api()
+
+        val first = api.fetchLatest("example/module")
+        val second = api.fetchLatest("example/module")
+
+        assertEquals(first, second)
+        assertNull(server.takeRequest().getHeader("If-None-Match"))
+        assertEquals("\"latest-v1\"", server.takeRequest().getHeader("If-None-Match"))
+    }
+
+    @Test
+    fun `reuses the cached release list when the etag matches`() = runBlocking {
+        server.enqueue(MockResponse().setBody(RELEASES).addHeader("ETag", "\"all-v1\""))
+        server.enqueue(MockResponse().setResponseCode(304))
+        val api = api()
+
+        val first = api.fetchAll("example/module")
+        val second = api.fetchAll("example/module")
+
+        assertEquals(first, second)
+        assertNull(server.takeRequest().getHeader("If-None-Match"))
+        assertEquals("\"all-v1\"", server.takeRequest().getHeader("If-None-Match"))
+    }
+
     private companion object {
+        val LATEST_RELEASE = """
+            {
+              "tag_name": "1.6.3-ceca486e",
+              "name": "WaEnhancer 1.6.3",
+              "published_at": "2026-11-06T23:34:31Z",
+              "html_url": "https://github.com/example/module/releases/tag/1.6.3-ceca486e",
+              "prerelease": false,
+              "body": "Changes",
+              "assets": [
+                {
+                  "name": "WaEnhancer-1.6.3.CECA486E.apk",
+                  "content_type": "application/vnd.android.package-archive",
+                  "browser_download_url": "https://github.com/example/module/releases/download/1.6.3-ceca486e/WaEnhancer-1.6.3.CECA486E.apk",
+                  "download_count": 9,
+                  "size": 1234
+                }
+              ]
+            }
+        """.trimIndent()
+
         val ATOM_FEED = """
             <?xml version="1.0" encoding="UTF-8"?>
             <feed xmlns="http://www.w3.org/2005/Atom">

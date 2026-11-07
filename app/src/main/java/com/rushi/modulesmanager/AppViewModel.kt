@@ -667,16 +667,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         if (stopped.get()) return@async
                         semaphore.withPermit {
                             val module = repoModules[item.packageName] ?: return@withPermit
-                            val repoFullName = module.repoFullName ?: return@withPermit
                             try {
-                                val live = container.liveApi.fetchLatest(repoFullName) ?: return@withPermit
-                                val liveVersion = ModuleVersion.parse(live.tag) ?: return@withPermit
+                                var live: LiveReleaseApi.LiveRelease? = null
+                                for (repo in module.liveReleaseRepos()) {
+                                    val attempt = runCatching {
+                                        container.liveApi.fetchLatest(repo)
+                                    }
+                                    live = attempt.getOrNull()
+                                    if (live != null) break
+                                    if (attempt.exceptionOrNull() is LiveUpdateRateLimitException) {
+                                        throw LiveUpdateRateLimitException()
+                                    }
+                                }
+                                val latestLive = live ?: return@withPermit
+                                val liveVersion = ModuleVersion.parse(latestLive.tag) ?: return@withPermit
                                 val dailyVersion = ModuleVersion.parse(module.latestRelease)
                                 if (dailyVersion != null &&
                                     !liveVersion.isNewerThan(
                                         dailyVersion,
                                         module.latestReleaseTime,
-                                        live.publishedAt,
+                                        latestLive.publishedAt,
                                     )
                                 ) {
                                     return@withPermit
@@ -686,17 +696,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                                 // decide when the codes match.
                                 val installedVersion = _installedVersions.value[item.packageName]
                                 val isUpdate = if (installedVersion != null) {
-                                    liveVersion.isUpdateOver(installedVersion, live.publishedAt)
+                                    liveVersion.isUpdateOver(installedVersion, latestLive.publishedAt)
                                 } else {
                                     liveVersion.isNewerThan(item.versionCode, item.versionName)
                                 }
                                 if (!isUpdate) return@withPermit
-                                val release = live.toRepoRelease()
-                                container.repo.applyLiveRelease(module.packageName, live.tag, release)
+                                val release = latestLive.toRepoRelease()
+                                container.repo.applyLiveRelease(
+                                    module.packageName,
+                                    latestLive.tag,
+                                    release,
+                                )
                                 _detail.value = _detail.value?.let { detail ->
                                     if (detail.packageName == module.packageName) {
                                         detail.copy(
-                                            latestRelease = live.tag,
+                                            latestRelease = latestLive.tag,
                                             latestReleaseTime = release.publishedAt,
                                             releases = listOf(release),
                                         )
@@ -826,28 +840,25 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
 
             // The daily index only carries the newest release per channel, so load the real
-            // history from GitHub for the Releases tab. The Xposed-Modules-Repo mirror keeps the
-            // release history, while the source repo can be stale or block the API.
+            // history from GitHub for the Releases tab. Try the source repository and the mirror,
+            // because either one can be ahead or missing releases.
             val shown = _detail.value
             if (shown != null) {
-                val candidates = listOfNotNull(
-                    "Xposed-Modules-Repo/${shown.packageName}",
-                    shown.repoFullName,
-                    shown.githubRepoFullName(),
-                ).distinct()
-                var history: List<LiveReleaseApi.LiveRelease> = emptyList()
-                for (repo in candidates) {
+                val history = LinkedHashMap<String, LiveReleaseApi.LiveRelease>()
+                for (repo in shown.liveReleaseRepos()) {
                     val attempt = runCatching { container.liveApi.fetchAll(repo) }
                     val found = attempt.getOrNull().orEmpty()
-                    if (found.isNotEmpty()) {
-                        history = found
-                        break
+                    for (release in found) {
+                        history.putIfAbsent(release.tag, release)
                     }
                     // Another repo cannot help when GitHub refused the request for rate limits.
                     if (attempt.exceptionOrNull() is LiveUpdateRateLimitException) break
                 }
                 if (history.isNotEmpty() && _detail.value?.packageName == packageName) {
-                    container.repo.applyReleaseHistory(packageName, history.map { it.toRepoRelease() })
+                    container.repo.applyReleaseHistory(
+                        packageName,
+                        history.values.map { it.toRepoRelease() },
+                    )
                     // Manual links are not in the repository, so keep the detail they already have.
                     container.repo.cachedModule(packageName)?.let { updated ->
                         _detail.value = updated

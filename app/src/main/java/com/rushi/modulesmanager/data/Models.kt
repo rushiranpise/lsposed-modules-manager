@@ -185,6 +185,33 @@ data class RepoModule(
         return pool.firstOrNull { it.apkAssets.isNotEmpty() } ?: pool.firstOrNull()
     }
 
+    /**
+     * Merges a full release history from GitHub. A source repository can publish newer
+     * releases than the daily index, so the newest stable release also becomes the version
+     * used by the detail header and install button.
+     */
+    fun withReleaseHistory(history: List<RepoRelease>): RepoModule {
+        val all = (history + releaseHistory + releases + betaReleases + snapshotReleases)
+            .distinctBy { it.url ?: it.tagName ?: it.name }
+            .sortedByDescending { parseInstant(it.publishedAt) ?: Instant.EPOCH }
+        val newest = all.firstOrNull {
+            !it.isPrerelease && !it.isSnapshot && it.apkAssets.isNotEmpty()
+        }
+        val current = ModuleVersion.parse(latestRelease)
+        val candidate = ModuleVersion.parse(newest?.tagName)
+        if (newest == null || candidate == null) return copy(releaseHistory = all)
+        val promote = current == null ||
+            candidate.isNewerThan(current, latestReleaseTime, newest.publishedAt)
+        if (!promote) return copy(releaseHistory = all)
+        return copy(
+            latestRelease = newest.tagName,
+            latestReleaseTime = newest.publishedAt,
+            releases = (listOf(newest) + releases)
+                .distinctBy { it.url ?: it.tagName ?: it.name },
+            releaseHistory = all,
+        )
+    }
+
     /** GitHub owner/repo that hosts the module source, used to fetch its README. */
     fun githubRepoFullName(): String? {
         repoFullName
@@ -205,6 +232,10 @@ data class RepoModule(
             ?.let { return it }
         return null
     }
+
+    /** Source repository first, then the Xposed-Modules-Repo mirror as a fallback. */
+    fun liveReleaseRepos(): List<String> =
+        listOfNotNull(githubRepoFullName(), repoFullName).distinct()
 
     /** GitHub releases list for this module, never a single tag or asset URL. */
     fun releasesPageUrl(): String? {
@@ -306,6 +337,9 @@ data class ModuleVersion(val code: Long, val name: String) {
     }
 
     companion object {
+        private val BUILD_HASH_SUFFIX =
+            Regex("""^(v?\d[\w.]*)-[0-9a-fA-F]{7,40}$""")
+
         /** Handles both "versionCode-versionName" and plain tags like "v1.2.3". */
         fun parse(value: String?): ModuleVersion? {
             if (value.isNullOrBlank()) return null
@@ -313,6 +347,11 @@ data class ModuleVersion(val code: Long, val name: String) {
             if (parts.size == 2) {
                 val code = parts[0].toLongOrNull()
                 if (code != null) return ModuleVersion(code, parts[1])
+                // WaEnhancer and similar projects append a build hash to an otherwise
+                // plain version tag, such as 1.6.3-ceca486e. The hash is not a version.
+                BUILD_HASH_SUFFIX.matchEntire(value)?.let { match ->
+                    return ModuleVersion(0, match.groupValues[1])
+                }
             }
             return ModuleVersion(0, value)
         }

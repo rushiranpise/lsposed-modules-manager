@@ -148,17 +148,15 @@ class RepoRepository(
     }
 
     /**
-     * Replaces the release lists with the full history from GitHub. The daily index keeps only
-     * the newest release per channel, and the live check only asks for the latest one.
+     * Merges the full history from GitHub. A newer stable release in that history also replaces
+     * the daily index release so the detail header and install button agree with the list.
      */
     fun applyReleaseHistory(packageName: String, all: List<RepoRelease>) {
         if (all.isEmpty()) return
-        // Kept apart from the channel lists: the index owns the newest version per channel and
-        // the install button, so a stale source repo cannot change what gets installed.
         _modules.value = _modules.value.map { module ->
-            if (module.packageName == packageName) module.copy(releaseHistory = all) else module
+            if (module.packageName == packageName) module.withReleaseHistory(all) else module
         }
-        details[packageName]?.let { details[packageName] = it.copy(releaseHistory = all) }
+        details[packageName]?.let { details[packageName] = it.withReleaseHistory(all) }
     }
 
     /** Keeps a README fetched from GitHub so reopening a module does not fetch it again. */

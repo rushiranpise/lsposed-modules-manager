@@ -24,6 +24,26 @@ class VersionTest {
     }
 
     @Test
+    fun `strips a build hash from a plain release tag`() {
+        val version = ModuleVersion.parse("1.6.3-ceca486e")!!
+
+        assertEquals(0L, version.code)
+        assertEquals("1.6.3", version.name)
+        assertTrue(
+            version.isUpdateOver(
+                InstalledPackageVersion(versionName = "1.6.2", versionCode = 0),
+                "2026-11-06T23:34:31Z",
+            ),
+        )
+        assertFalse(
+            version.isUpdateOver(
+                InstalledPackageVersion(versionName = "1.6.3", versionCode = 0),
+                "2026-11-06T23:34:31Z",
+            ),
+        )
+    }
+
+    @Test
     fun `compares version codes and plain version names`() {
         assertTrue(ModuleVersion.parse("521-3.8.4")!!.isNewerThan(520, "3.8.3"))
         assertFalse(ModuleVersion.parse("520-3.8.3")!!.isNewerThan(520, "3.8.3"))
