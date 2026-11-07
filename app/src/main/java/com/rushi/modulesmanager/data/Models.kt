@@ -295,11 +295,15 @@ data class RepoModule(
 }
 
 data class ModuleVersion(val code: Long, val name: String) {
+    private fun plainBuildNumber(): Long? =
+        name.trim().removePrefix("v").removePrefix("V").toLongOrNull()
+
     fun isNewerThan(installedCode: Long, installedName: String?): Boolean {
         if (code > 0L) {
             if (installedCode <= 0L) return true
             return code > installedCode
         }
+        if (plainBuildNumber()?.let { it == installedCode } == true) return false
         return compareVersionNames(name, installedName) > 0
     }
 
@@ -330,6 +334,13 @@ data class ModuleVersion(val code: Long, val name: String) {
             val sameName = name.replace(' ', '_') ==
                 installed.versionName.orEmpty().replace(' ', '_')
             if (sameName) return false
+            val published = parseInstant(publishedAt)?.toEpochMilli() ?: return false
+            return installed.lastUpdateTime > 0L && published > installed.lastUpdateTime
+        }
+        // Some repositories tag the release by build number only, such as v202, while the
+        // installed package reports versionName 1.202 and versionCode 202. Treat the matching
+        // code as the same build instead of comparing 202 against the leading 1 in the name.
+        if (plainBuildNumber()?.let { it == installed.versionCode } == true) {
             val published = parseInstant(publishedAt)?.toEpochMilli() ?: return false
             return installed.lastUpdateTime > 0L && published > installed.lastUpdateTime
         }

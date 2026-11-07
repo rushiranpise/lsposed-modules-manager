@@ -44,6 +44,29 @@ class VersionTest {
     }
 
     @Test
+    fun `a plain build-number tag matches the installed version code`() {
+        val version = ModuleVersion.parse("v202")!!
+        val installed = InstalledPackageVersion(
+            versionName = "1.202",
+            versionCode = 202,
+            lastUpdateTime = java.time.Instant.parse("2026-11-07T08:44:39Z").toEpochMilli(),
+        )
+
+        assertFalse(version.isUpdateOver(installed, "2026-11-04T15:55:32Z"))
+        assertFalse(version.isNewerThan(202, "1.202"))
+        assertTrue(
+            version.isUpdateOver(
+                installed.copy(
+                    lastUpdateTime = java.time.Instant
+                        .parse("2026-11-01T00:00:00Z")
+                        .toEpochMilli(),
+                ),
+                "2026-11-04T15:55:32Z",
+            ),
+        )
+    }
+
+    @Test
     fun `compares version codes and plain version names`() {
         assertTrue(ModuleVersion.parse("521-3.8.4")!!.isNewerThan(520, "3.8.3"))
         assertFalse(ModuleVersion.parse("520-3.8.3")!!.isNewerThan(520, "3.8.3"))
