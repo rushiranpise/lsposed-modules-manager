@@ -457,6 +457,8 @@ fun ModuleDetailScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary,
                                         )
+                                    } else {
+                                        StatusPill(text = "Fallback")
                                     }
                                 }
                             }
