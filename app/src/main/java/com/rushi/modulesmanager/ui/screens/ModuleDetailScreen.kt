@@ -111,6 +111,7 @@ import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.XposedApiPill
 import com.rushi.modulesmanager.ui.components.favouriteColor
 import com.rushi.modulesmanager.ui.components.markdownPlainText
 import com.rushi.modulesmanager.ui.components.shortVersion
@@ -555,6 +556,7 @@ private fun DetailHeader(
                             text = "v${shortVersion(latestVersion)}",
                         )
                     }
+                    XposedApiPill(module.apiVersion)
                 }
                 module.developerLogin()?.let { developer ->
                     Spacer(Modifier.height(8.dp))

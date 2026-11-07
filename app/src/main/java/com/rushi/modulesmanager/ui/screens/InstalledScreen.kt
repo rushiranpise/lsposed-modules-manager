@@ -84,6 +84,7 @@ import com.rushi.modulesmanager.ui.components.InstalledAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StatusPill
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.XposedApiPill
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
 import com.rushi.modulesmanager.ui.components.shortVersion
 import com.rushi.modulesmanager.ui.theme.amoledCardBorder
@@ -670,6 +671,8 @@ private fun InstalledCard(
                                 }
                             },
                         )
+                        Spacer(Modifier.width(6.dp))
+                        XposedApiPill(module.apiVersion)
                         if (module.scope.isNotEmpty()) {
                             Spacer(Modifier.width(6.dp))
                             Text(

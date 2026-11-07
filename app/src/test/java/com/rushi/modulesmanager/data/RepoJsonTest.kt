@@ -2,6 +2,7 @@ package com.rushi.modulesmanager.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,7 +27,38 @@ class RepoJsonTest {
         assertEquals(1, RepoJson.parseRepos(DUPLICATES).size)
     }
 
+    @Test
+    fun `reads target libxposed api from index metadata`() {
+        val modules = RepoJson.parseRepos(API_METADATA).associateBy { it.packageName }
+
+        assertEquals(102, modules["com.example.modern"]?.apiVersion)
+        assertNull(modules["com.example.legacy"]?.apiVersion)
+    }
+
     private companion object {
+        val API_METADATA = """
+            [
+              {
+                "full_name": "example/modern",
+                "package": "com.example.modern",
+                "release": {
+                  "tag": "1-1.0",
+                  "apk_url": "https://example.com/modern.apk"
+                },
+                "metadata": { "targetApi": 102 }
+              },
+              {
+                "full_name": "example/legacy",
+                "package": "com.example.legacy",
+                "release": {
+                  "tag": "1-1.0",
+                  "apk_url": "https://example.com/legacy.apk"
+                },
+                "metadata": { "name": "Legacy" }
+              }
+            ]
+        """.trimIndent()
+
         val DUPLICATES = """
             [
               {

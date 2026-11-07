@@ -1,6 +1,8 @@
 package com.rushi.modulesmanager.data
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -57,6 +59,41 @@ class ModuleMarkerTest {
         )
     }
 
+    @Test
+    fun `reads target api from module prop`() {
+        val apk = tempApk("META-INF/xposed/module.prop")
+        try {
+            assertEquals(102, ModuleMarker.targetApiVersion(apk.absolutePath, null))
+        } finally {
+            apk.delete()
+        }
+    }
+
+    @Test
+    fun `reads target api from a split apk`() {
+        val base = tempApk("META-INF/androidx.core_core.version")
+        val split = tempApk("META-INF/xposed/module.prop")
+        try {
+            assertEquals(
+                102,
+                ModuleMarker.targetApiVersion(base.absolutePath, arrayOf(split.absolutePath)),
+            )
+        } finally {
+            base.delete()
+            split.delete()
+        }
+    }
+
+    @Test
+    fun `legacy archive has no target api`() {
+        val apk = tempApk("assets/xposed_init")
+        try {
+            assertNull(ModuleMarker.targetApiVersion(apk.absolutePath, null))
+        } finally {
+            apk.delete()
+        }
+    }
+
     private fun assertMarkers(apk: File) {
         try {
             assertTrue(ModuleMarker.isModernModule(apk.absolutePath, null))
@@ -69,7 +106,7 @@ class ModuleMarkerTest {
         val file = File.createTempFile("module", ".apk")
         ZipOutputStream(file.outputStream()).use { zip ->
             zip.putNextEntry(ZipEntry(entry))
-            zip.write("minApiVersion=101\n".toByteArray())
+            zip.write("minApiVersion=101\ntargetApiVersion=102\n".toByteArray())
             zip.closeEntry()
         }
         return file

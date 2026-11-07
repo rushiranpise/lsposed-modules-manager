@@ -98,6 +98,7 @@ import com.rushi.modulesmanager.ui.components.ModuleAvatar
 import com.rushi.modulesmanager.ui.components.PackageLabel
 import com.rushi.modulesmanager.ui.components.StarBadge
 import com.rushi.modulesmanager.ui.components.VersionPill
+import com.rushi.modulesmanager.ui.components.XposedApiPill
 import com.rushi.modulesmanager.ui.components.favouriteColor
 import com.rushi.modulesmanager.ui.components.starAccentColor
 import com.rushi.modulesmanager.ui.components.VerticalScrollbar
@@ -879,6 +880,7 @@ internal fun ModuleCard(
                             )
                             latest != null -> VersionPill(text = "v${shortVersion(latest.name)}")
                         }
+                        XposedApiPill(module.apiVersion)
                     }
                     val translated = translation?.text != null
                     if (showTranslate || translated) {

@@ -308,4 +308,5 @@ private fun InstalledModule.asRepoModule(): RepoModule = RepoModule(
     hide = false,
     updatedAt = null,
     stargazerCount = 0,
+    apiVersion = apiVersion,
 )

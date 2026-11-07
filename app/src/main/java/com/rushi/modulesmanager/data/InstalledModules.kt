@@ -18,6 +18,8 @@ data class InstalledModule(
     val scope: List<String>,
     val icon: Drawable?,
     val hasLauncher: Boolean,
+    /** Target libxposed API level, or null for a legacy Xposed module. */
+    val apiVersion: Int? = null,
 )
 
 /** Version data for every installed package, used to match repository modules. */
@@ -164,6 +166,9 @@ class InstalledModuleScanner(private val context: Context) {
             scope = meta?.let { readScope(it) }.orEmpty(),
             icon = app?.let { runCatching { it.loadIcon(pm) }.getOrNull() },
             hasLauncher = pm.getLaunchIntentForPackage(info.packageName) != null,
+            apiVersion = app?.let {
+                ModuleMarker.targetApiVersion(it.sourceDir, it.splitSourceDirs)
+            },
         )
     }
 

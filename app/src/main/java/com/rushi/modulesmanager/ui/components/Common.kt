@@ -175,6 +175,37 @@ fun VersionPill(text: String) {
     }
 }
 
+/** Target libxposed API level, or Legacy for modules without one. */
+@Composable
+fun XposedApiPill(apiVersion: Int?) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val modern = apiVersion != null
+    val content = when {
+        !modern -> MaterialTheme.colorScheme.onSurfaceVariant
+        dark -> Color(0xFF58A6FF)
+        else -> Color(0xFF0969DA)
+    }
+    val border = when {
+        !modern -> MaterialTheme.colorScheme.outlineVariant
+        dark -> Color(0xFF1F6FEB)
+        else -> Color(0xFF0969DA)
+    }
+    Surface(
+        color = Color.Transparent,
+        contentColor = content,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, border),
+    ) {
+        Text(
+            text = apiVersion?.let { "API $it" } ?: "Legacy",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+        )
+    }
+}
+
 @Composable
 fun starAccentColor(): Color {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f

@@ -113,6 +113,8 @@ data class RepoModule(
     val repoFullName: String? = null,
     /** Full release list fetched for the Releases tab. */
     val releaseHistory: List<RepoRelease> = emptyList(),
+    /** Target libxposed API level, or null for a legacy Xposed module. */
+    val apiVersion: Int? = null,
 ) {
     val hasReleases: Boolean
         get() = releases.isNotEmpty() || betaReleases.isNotEmpty() || snapshotReleases.isNotEmpty()
@@ -487,7 +489,8 @@ object RepoJson {
         val releaseName = release.optString("name").takeIf { it.isNotBlank() && it != "null" }
         val htmlUrl = obj.optString("html_url").takeIf { it.isNotBlank() && it != "null" }
         val fullName = obj.optString("full_name").takeIf { it.isNotBlank() && it != "null" }
-        val metadataName = obj.optJSONObject("metadata")
+        val metadata = obj.optJSONObject("metadata")
+        val metadataName = metadata
             ?.optString("name")
             ?.takeIf { it.isNotBlank() && it != "null" }
         val repoName = (fullName ?: packageName).substringAfter('/')
@@ -544,6 +547,7 @@ object RepoJson {
             forkCount = obj.optInt("forks_count", 0),
             addedAt = obj.optString("added_at").takeIf { it.isNotBlank() && it != "null" },
             repoFullName = orgRepo.takeIf { it.isNotBlank() && it != "null" } ?: fullName,
+            apiVersion = metadata?.optInt("targetApi", 0)?.takeIf { it > 0 },
         )
     }
 
@@ -586,6 +590,7 @@ object RepoJson {
             hide = obj.optBoolean("hide", false),
             updatedAt = obj.optString("updatedAt").takeIf { it.isNotBlank() && it != "null" },
             stargazerCount = obj.optInt("stargazerCount", 0),
+            apiVersion = obj.optInt("targetApi", 0).takeIf { it > 0 },
         )
     }
 
