@@ -7,25 +7,14 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Versions up to 2.0.0 used `com.rushi.modulesmanager` and update separately.
 - ⬇️ [Latest release](https://github.com/rushiranpise/lsposed-modules-manager/releases)
 
-## What's new in 2.2
+## What's new in 2.3
 
-- Installed update checks now catch releases that keep the same version code but publish a newer build, including re-uploaded APKs.
-- Installed libxposed modules shipped as split APKs are detected from their module markers.
-- Batch update progress uses the bottom banner style, with the current module, done count, cancel and dismiss actions.
-- Open every module by the same GitHub developer from the author pill on a module page or **More by <author>** in a card menu.
-- Cards show an outlined package pill, a gold star count, a gray fork count, a red favourite heart and a source badge when the index lists several repositories.
-- Long descriptions expand with **Read more**. The card menu can copy the package name, open the releases list or open the developer page.
-- Module pages show stars and forks, an orange date pill, an accent author pill and the version pill in one metadata row, with an **Uninstall** action for installed modules.
-- Uninstall uses the selected installer: silent through Shizuku or root, otherwise the system uninstaller.
-- HyperOS, ColorOS and similar ROMs are asked once for the installed-apps permission, so module detection works there.
-- Release notes in the Releases tab render as formatted Markdown, translate with the same language settings as descriptions and READMEs, and have dividers under the date and before the APK.
-- The Modules list can sort by name, last update, stars, recently added or number of sources.
-- Recent and starred shelves use compact horizontal cards of equal height.
-- Message banners match the download banner and follow the app theme, including AMOLED.
-- AMOLED mode uses fully black cards, navigation pill and download banner with a hairline outline.
-- The Modules list reports when the index was last updated on launch and after a refresh.
-- Tablets keep the navigation rail; phones keep the phone navigation in landscape.
-- Green version pills, gold star accents and outlined package pills throughout the app.
+- Save release APKs without installing them on Android 10+, with progress in the app and notification and a Cancel action in both places.
+- Module cards and detail pages show each module's target libxposed API level, or Legacy for older modules.
+- Tablet rail switching from a detail page now returns to the selected tab root instead of restoring the old detail page.
+- Notification permission is requested when the first transfer starts, not on launch, and can be enabled later from Settings.
+- Batch update and manual save transfers now run in the foreground service, so they keep going when the app is backgrounded.
+- Duplicate update starts are blocked, delegated installs no longer hold up a batch, and the manager's own update is installed last.
 
 ## Features
 
@@ -33,10 +22,12 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Search, sort by name, last update, stars, recently added or number of sources, and filter by updates, installed or not installed.
 - See the installed version next to an available update. Each update row shows its own download percentage and can be cancelled without stopping the rest of the batch.
 - Pause and resume a module download, or let it retry after a dropped connection and continue from the bytes already on disk. Settings can limit the app to 1 to 5 concurrent downloads.
+- Save a release APK without installing it on Android 10+, with progress in the app and notification and a Cancel action in both places. Saved files go to Download/ModulesManager.
 - Open a module to read its README, its full GitHub release history and target apps.
 - Every module page links to the rest of that developer's modules, and the card menu offers the same action.
 - Card menus can copy the package name, open the repository's releases list or show the developer page.
 - The module page shows the package, author, star and fork counts, release date and version pills, with an Uninstall action for installed modules.
+- Module cards and detail pages show the target libxposed API level, or Legacy for older modules.
 - Long card descriptions expand with **Read more**; AMOLED mode gives cards, the navigation pill and the download banner a black background and a hairline outline.
 - The Releases tab lists every published release, stable and pre-release, with their APKs, and renders and translates release notes.
 - Translate module descriptions, READMEs and release notes, manually or automatically.
@@ -47,6 +38,7 @@ An Android app for finding, installing and updating Xposed/Lsposed modules.
 - Cards show a small sources badge when the index lists more than one repository for the package.
 - Long press an installed module to uninstall it through the selected installer.
 - The Installed tab lists every installed module, including ones missing from the index. Its filters are All, Updates, Skipped and Untracked.
+- On tablets, switching rail tabs from a module or developer page returns to the selected tab instead of restoring the previous detail page.
 - Star modules to keep them in the Library, together with recently viewed modules and skipped or ignored updates.
 - Floating refresh, sort and scroll-to-top actions, a navigation rail on tablets, the phone navigation in landscape on phones, and package events that keep the installed list current.
 - Light, dark and system themes, Material You colors, AMOLED black and GitHub-style identicons.
